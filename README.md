@@ -26,6 +26,16 @@ reimplementation of the concepts in
 - **Auto game discovery** - scan installed launchers (Steam, GOG, Epic, EA,
   Origin, Ubisoft) or deep-scan any drive/folder; results are saved so a
   rescan catches newly installed games.
+- **Main-executable filtering** - the scan flags the main game executable
+  (DX12 preferred, then shallowest folder, then largest file) so the library
+  shows one clean card per game instead of every launcher/stub/helper exe;
+  alternate executables stay available via the launch picker on the install
+  page.
+- **Instant library** - the last scan is cached, so the UI opens directly on
+  your library without re-scanning every folder at startup; hit *Rescan* to
+  refresh.
+- **Executable icons** - real icons are extracted from each game's `.exe` and
+  shown on the cover-style library cards.
 
 ## Quick start
 
@@ -57,13 +67,14 @@ or from the `DLSS5-UI` folder:
 npm start
 ```
 
-The Electron window opens. From there:
+The Electron window opens (launched directly, so no console window stays open).
+From there:
 
 | Action | How |
 |---|---|
 | **Add games** | Click *Add game folder* or *Auto-scan* (launchers or deep scan a drive) |
-| **Rescan** | *Rescan all* re-scans every saved folder for new executables |
-| **Install** | Select a game, pick a provider and options, click *Install* |
+| **Rescan** | *Rescan all* re-scans every saved folder (saved scan also loads instantly on startup) |
+| **Install** | Select a game, optionally pick an alternate executable, choose a provider and options, click *Install* |
 | **Verify** | Check what ended up in the folder vs. the manifest |
 | **Restore** | Roll back any install from the manifest backup |
 
@@ -116,7 +127,7 @@ UI and for scripting:
 
 | Command | Response fields |
 |---|---|
-| `-Scan` | `gameDir`, `chosen`, `candidates[]`, `hasNativeDlss`, `reshade{}` |
+| `-Scan` | `gameDir`, `chosen`, `candidates[]` (each with a `Main` flag), `hasNativeDlss`, `reshade{}` |
 | `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `added[]`, `dryRun`, `manifestPath` |
 | `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` |
 | `-Uninstall` | `removed[]`, `restored[]` |
@@ -201,15 +212,17 @@ own full neural pass, so quality scales with `-Passes`.
 ```
 DLSS5-Swapper.ps1    # backend - the whole tool (single file)
 DLSS5-UI/            # Electron desktop app
-  main.js            #   main process (IPC, swapper bridge)
+  main.js            #   main process (IPC, swapper bridge, icon cache)
   preload.js         #   context bridge (ipcRenderer -> window.dlss5)
+  icons-extract.ps1  #   batch .exe icon extraction -> www/icons (PNG)
   www/
     index.html       #   shell (titlebar + sidebar + pages)
     style.css        #   full dark theme
     app.js           #   renderer logic (library, install, verify, backups, console)
   package.json       #   electron dependency + start script
-  start.bat          #   one-click launcher
+  start.bat          #   one-click launcher (no console window)
   library.json       #   saved game folders (gitignored)
+  library-cache.json #   last scan, loads instantly at startup (gitignored)
 kit/                 # harvested binary kit (not committed; built by -BuildKit)
 sources.json         # download URLs for the kit sources
 ```

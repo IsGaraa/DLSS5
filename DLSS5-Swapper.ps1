@@ -418,6 +418,11 @@ $sorted = @($candidates.ToArray()) | Sort-Object -Property @{ Expression = { if 
     foreach ($c in $combined) {
         if ($seen.Add($c.Name.ToLower())) { $chosen = $c; break }
     }
+    if ($chosen) {
+        foreach ($c in $combined) {
+            $c | Add-Member -NotePropertyName Main -NotePropertyValue ([bool]($c.Path -eq $chosen.Path)) -Force
+        }
+    }
     $reshade = $null
     if ($chosen) { $reshade = Get-ReShadeInfo (Split-Path -Parent $chosen.Path) }
     return [pscustomobject]@{

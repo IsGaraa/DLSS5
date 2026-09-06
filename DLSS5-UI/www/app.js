@@ -13,7 +13,8 @@ window.onerror = (msg, src, line) => {
 const state = {
   folders: [],
   library: [],
-  selected: null
+  selected: null,
+  savedAt: null
 };
 
 const TITLES = {
@@ -86,27 +87,41 @@ function gameCard(g) {
   card.className = 'card card-hover game-card';
   if (state.selected && state.selected.path === g.path) card.classList.add('selected');
 
-  const head = document.createElement('div');
-  head.className = 'gc-head';
+  const thumb = document.createElement('div');
+  thumb.className = 'cover-thumb';
+  const iconImg = document.createElement('img');
+  iconImg.alt = '';
+  iconImg.draggable = false;
+  const letter = document.createElement('span');
+  letter.className = 'cover-letter';
+  letter.textContent = (g.name || '?').trim().charAt(0).toUpperCase();
+  thumb.appendChild(iconImg);
+  thumb.appendChild(letter);
+  api.getIcon(g.path).then(url => {
+    if (url) { iconImg.src = url; letter.classList.add('has-icon'); }
+  }).catch(() => {});
+
+  const body = document.createElement('div');
+  body.className = 'cover-body';
+
   const nm = document.createElement('div');
-  nm.className = 'gc-name';
+  nm.className = 'cover-name';
   nm.textContent = g.name;
+
+  const chips = document.createElement('div');
+  chips.className = 'chips cover-meta';
   const badge = document.createElement('span');
   badge.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
   badge.textContent = g.api ? (g.label || g.api) : 'undetected';
-  head.appendChild(nm);
-  head.appendChild(badge);
-
-  const pth = document.createElement('div');
-  pth.className = 'gc-path';
-  pth.textContent = g.path;
-
-  const chips = document.createElement('div');
-  chips.className = 'chips';
+  chips.appendChild(badge);
   if (g.native) chips.appendChild(chip('accent', 'Native DLSS'));
   if (g.reshade) chips.appendChild(chip('blue', 'ReShade ' + g.reshade.ver));
   if (g.bit) chips.appendChild(chip('dim', g.bit + '-bit'));
   if (g.via) chips.appendChild(chip('dim', g.via));
+
+  const pth = document.createElement('div');
+  pth.className = 'gc-path';
+  pth.textContent = g.path;
 
   const btns = document.createElement('div');
   btns.className = 'gc-btns';
@@ -121,10 +136,13 @@ function gameCard(g) {
   btns.appendChild(open);
   btns.appendChild(un);
 
-  card.appendChild(head);
-  card.appendChild(pth);
-  card.appendChild(chips);
-  card.appendChild(btns);
+  body.appendChild(nm);
+  body.appendChild(chips);
+  body.appendChild(pth);
+  body.appendChild(btns);
+
+  card.appendChild(thumb);
+  card.appendChild(body);
   return card;
 }
 
@@ -140,24 +158,34 @@ function renderLibrary() {
   grid.innerHTML = '';
   $('#lib-empty').classList.toggle('hidden', state.library.length > 0);
   for (const g of state.library) grid.appendChild(gameCard(g));
-  $('#lib-status').textContent = state.library.length + ' game' + (state.library.length === 1 ? '' : 's') + ' found';
+  let status = state.library.length + ' game' + (state.library.length === 1 ? '' : 's');
+  if (state.savedAt) status += '\u00B7 last scan ' + new Date(state.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  $('#lib-status').textContent = status;
 }
 
 function scanToEntries(r, dir, via) {
   const lib = [];
-  for (const c of (r.candidates || [])) {
-    lib.push({
-      dir: dir,
-      path: c.Path,
-      name: c.Name,
-      bit: c.Bitness,
-      api: c.Api || '',
-      label: c.Label || '',
-      via: via || '',
-      native: !!r.hasNativeDlss,
-      reshade: (r.reshade && r.reshade.present) ? { ver: r.reshade.version || '?' } : null
-    });
+  const cands = r.candidates || [];
+  const mainPath = (r.chosen && r.chosen.Path) || null;
+  let main = cands.find(c => c.Main || (mainPath && c.Path === mainPath)) || cands[0];
+  if (!main) return lib;
+  const alternates = [];
+  for (const c of cands) {
+    if (c === main || c.Path === main.Path) continue;
+    alternates.push({ path: c.Path, name: c.Name, bit: c.Bitness, api: c.Api || '', label: c.Label || '', via: c.Via || '' });
   }
+  lib.push({
+    dir: dir,
+    path: main.Path,
+    name: main.Name,
+    bit: main.Bitness,
+    api: main.Api || '',
+    label: main.Label || '',
+    via: via || main.Via || '',
+    native: !!r.hasNativeDlss,
+    reshade: (r.reshade && r.reshade.present) ? { ver: r.reshade.version || '?' } : null,
+    alternates: alternates
+  });
   return lib;
 }
 
@@ -167,19 +195,22 @@ async function rescan() {
     const lib = [];
     for (let i = 0; i < state.folders.length; i++) {
       const f = state.folders[i];
-      $('#lib-status').textContent = 'Scanning ' + f.split(/[\\/]/).pop() + ' (' + (i + 1) + '/' + state.folders.length + ')...';
+      if (f) $('#lib-status').textContent = 'Scanning ' + f.split(/[\\/]/).pop() + ' (' + (i + 1) + '/' + state.folders.length + ')...';
       try {
         const r = await api.invoke('scan', f);
-        lib.push.apply(lib, scanToEntries(r, f, ''));
-        logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe)', 'ok');
+        const entries = scanToEntries(r, f, '');
+        lib.push.apply(lib, entries);
+        logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe, ' + entries.length + ' main)', 'ok');
       } catch (e) {
         logLine('scan failed: ' + f + ' - ' + e.message, 'err');
       }
     }
     state.library = lib;
     state.selected = null;
+    state.savedAt = Date.now();
     renderLibrary();
     renderInstall();
+    try { await api.invoke('library-cache-save', { savedAt: state.savedAt, games: lib }); } catch (e) {}
   } finally {
     setBusy(false);
   }
@@ -248,18 +279,30 @@ function renderInstall() {
   const eng = $('#inst-engine');
   const btn = $('#btn-install');
   const note = $('#inst-note');
+  const exeWrap = $('#inst-exe-wrap');
+  const exeSel = $('#o-exe');
   if (!g) {
     gd.innerHTML = '<b>No game selected</b>';
     eng.textContent = 'pick one in the library';
     eng.className = 'pill dim';
     btn.disabled = true;
     note.classList.add('hidden');
+    exeWrap.classList.add('hidden');
     return;
   }
   gd.innerHTML = '<b>' + esc(g.name) + '</b><div class="gc-path" style="margin:4px 0 0">' + esc(g.path) + '</div>';
   eng.textContent = g.api ? (g.label || g.api) : 'undetected';
   eng.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
   btn.disabled = false;
+  exeWrap.classList.remove('hidden');
+  exeSel.innerHTML = '';
+  const opts = [{ name: g.name, api: g.label || '' }].concat(g.alternates || []);
+  for (const o of opts) {
+    const opt = document.createElement('option');
+    opt.value = o.name;
+    opt.textContent = o.name + (o.api ? '  (' + o.api + ')' : '');
+    exeSel.appendChild(opt);
+  }
   if (!g.api) {
     note.textContent = 'Renderer not detected for this executable. Default DXGI hook will be used - pick the exact API above if the game does not hook.';
     note.classList.remove('hidden');
@@ -269,6 +312,7 @@ function renderInstall() {
 }
 
 function readInstallOptions() {
+  const exe = $('#o-exe').value || (state.selected ? state.selected.name : '');
   return {
     provider: state.provider,
     passes: parseInt($('#o-passes').value, 10),
@@ -284,7 +328,7 @@ function readInstallOptions() {
     uplift: $('#o-uplift').checked,
     force: $('#o-force').checked,
     launch: $('#o-launch').checked,
-    exe: state.selected ? state.selected.name : ''
+    exe: exe
   };
 }
 
@@ -428,6 +472,7 @@ function bind() {
 
   $('#btn-add').onclick = onAddFolder;
   $('#btn-add2').onclick = onAddFolder;
+  $('#btn-scan2').onclick = () => rescan();
   $('#btn-rescan').onclick = () => rescan();
   $('#btn-autoscan').onclick = () => autoScan();
   $('#btn-refresh-bk').onclick = () => loadBackups();
@@ -485,11 +530,19 @@ async function onAddFolder() {
   state.folders = await api.invoke('library-load');
   if (!Array.isArray(state.folders)) state.folders = [];
   logLine('DLSS 5 Swapper UI ready \u00B7 backend DLSS5-Swapper.ps1', 'ok');
-  logLine('library: ' + (state.folders.length ? state.folders.join('  \u00B7  ') : 'empty - add a game folder'), '');
-  if (state.folders.length) {
-    await rescan();
+  logLine('folders: ' + (state.folders.length ? state.folders.join('  \u00B7  ') : 'empty - add a game folder'), '');
+
+  const cache = await api.invoke('library-cache-load');
+  if (cache && Array.isArray(cache.games) && cache.games.length) {
+    state.library = cache.games;
+    state.savedAt = cache.savedAt || null;
+    logLine('library loaded from saved scan (' + cache.games.length + ' games) - rescan to refresh', 'ok');
   } else {
-    setBusy(false);
+    logLine(state.folders.length
+      ? 'no saved scan yet - click Rescan to scan your folders'
+      : 'no folders configured yet - add a game folder', '');
   }
+  renderLibrary();
+  setBusy(false);
   showPage('lib');
 })();

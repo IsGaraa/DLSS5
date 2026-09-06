@@ -9,3 +9,5 @@ backup/
 # electron app
 node_modules/
 DLSS5-UI/library.json
+DLSS5-UI/library-cache.json
+DLSS5-UI/www/icons/

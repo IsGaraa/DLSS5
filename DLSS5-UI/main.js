@@ -2,11 +2,20 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron')
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const SWAPPER = path.join(__dirname, '..', 'DLSS5-Swapper.ps1');
 const LIB_FILE = path.join(__dirname, 'library.json');
+const CACHE_FILE = path.join(__dirname, 'library-cache.json');
+const ICONS_DIR = path.join(__dirname, 'www', 'icons');
+const ICONS_SCRIPT = path.join(__dirname, 'icons-extract.ps1');
 
 let win = null;
+
+const iconCache = new Map();
+const iconPending = new Map();
+let iconBatch = [];
+let iconBatchTimer = null;
 
 const FOLDER_LABELS = { '0': '0', '1': '1', '2': '2', '3': '3 (Lumenite Kernel)', '4': '4' };
 
@@ -68,6 +77,13 @@ function loadLibrary() {
 function saveLibrary(list) {
   fs.writeFileSync(LIB_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
+function loadLibraryCache() {
+  try { return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); }
+  catch (e) { return null; }
+}
+function saveLibraryCache(data) {
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
 
 function listBackups(folders) {
   const out = [];
@@ -81,6 +97,87 @@ function listBackups(folders) {
     } catch (e) {}
   }
   return out;
+}
+
+function iconKey(exePath) {
+  return crypto.createHash('sha1').update(String(exePath).toLowerCase()).digest('hex').slice(0, 16);
+}
+
+function runPs(script, args) {
+  return new Promise((resolve, reject) => {
+    const ps = spawn('powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script].concat(args),
+      { windowsHide: true });
+    let out = '', err = '';
+    ps.stdout.setEncoding('utf8');
+    ps.stderr.setEncoding('utf8');
+    ps.stdout.on('data', d => out += d);
+    ps.stderr.on('data', d => err += d);
+    ps.on('error', reject);
+    ps.on('close', code => {
+      if (code !== 0) return reject(new Error(err.trim() || ('script exited with code ' + code)));
+      resolve(out.replace(/^\uFEFF/, '').trim());
+    });
+  });
+}
+
+function flushIconBatch() {
+  iconBatchTimer = null;
+  const requests = iconBatch;
+  iconBatch = [];
+  if (!requests.length) return;
+
+  const miss = [];
+  for (const r of requests) {
+    if (iconCache.has(r.key)) continue;
+    if (fs.existsSync(path.join(ICONS_DIR, r.key + '.png'))) {
+      iconCache.set(r.key, 'icons/' + r.key + '.png');
+    } else {
+      miss.push(r);
+    }
+  }
+
+  const settle = () => {
+    for (const r of requests) {
+      const pend = iconPending.get(r.key);
+      if (pend) { iconPending.delete(r.key); pend.forEach(p => p(iconCache.get(r.key))); }
+    }
+  };
+
+  if (!miss.length) return settle();
+
+  const tmpJson = path.join(app.getPath('temp'), 'dlss5-icons-' + Date.now() + '.json');
+  fs.writeFileSync(tmpJson, JSON.stringify({
+    outDir: ICONS_DIR,
+    icons: miss.map(r => ({ key: r.key, path: r.exe }))
+  }));
+  runPs(ICONS_SCRIPT, ['-JsonIn', tmpJson]).then(result => {
+    let map = {};
+    try { map = JSON.parse(result); } catch (e) {}
+    for (const r of miss) {
+      if (!iconCache.has(r.key)) iconCache.set(r.key, map[r.key] ? 'icons/' + r.key + '.png' : null);
+    }
+  }).catch(() => {
+    for (const r of miss) if (!iconCache.has(r.key)) iconCache.set(r.key, null);
+  }).finally(() => {
+    try { fs.unlinkSync(tmpJson); } catch (e) {}
+    settle();
+  });
+}
+
+function getIconUrl(exePath) {
+  return new Promise(resolve => {
+    if (!exePath || !/\.exe$/i.test(exePath) || !fs.existsSync(exePath)) return resolve(null);
+    const key = iconKey(exePath);
+    if (iconCache.has(key)) return resolve(iconCache.get(key));
+    if (!iconPending.has(key)) {
+      iconPending.set(key, []);
+      iconBatch.push({ key, exe: exePath });
+      if (iconBatchTimer) clearTimeout(iconBatchTimer);
+      iconBatchTimer = setTimeout(flushIconBatch, 120);
+    }
+    iconPending.get(key).push(resolve);
+  });
 }
 
 function createWindow() {
@@ -121,6 +218,9 @@ ipcMain.handle('pick-exe', async () => {
 
 ipcMain.handle('library-load', () => loadLibrary());
 ipcMain.handle('library-save', (e, list) => { saveLibrary(list); return true; });
+ipcMain.handle('library-cache-load', () => loadLibraryCache());
+ipcMain.handle('library-cache-save', (e, data) => { saveLibraryCache(data); return true; });
+ipcMain.handle('get-icon', (e, exePath) => getIconUrl(exePath));
 
 ipcMain.handle('scan', (e, folder) => runSwapper(['-Scan', '-Json', '-GamePath', folder]));
 ipcMain.handle('discover', (e, root, depth) => {
