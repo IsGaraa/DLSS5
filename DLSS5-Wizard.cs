@@ -496,6 +496,7 @@ namespace DLSS5
             page.Controls.Add(_libFlow);
             page.Controls.Add(_libHint);
             _pages["lib"] = page;
+            _pageHost.Controls.Add(page);
 
             _libFlow.Resize += (s, e) =>
             {
@@ -846,6 +847,7 @@ namespace DLSS5
             page.Controls.Add(body);
 
             _pages["opts"] = page;
+            _pageHost.Controls.Add(page);
 
             _segChicken.Click += (s, e) => SetProvider(true);
             _segRenodx.Click += (s, e) => SetProvider(false);
@@ -926,6 +928,7 @@ namespace DLSS5
             _bkFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Ui.Bg, Padding = new Padding(0, 10, 0, 10), WrapContents = false };
             page.Controls.Add(_bkFlow);
             _pages["bkups"] = page;
+            _pageHost.Controls.Add(page);
             refresh.Click += (s, e) => RefreshBackups();
         }
 
@@ -1000,6 +1003,7 @@ namespace DLSS5
             page.Controls.Add(_log);
             page.Controls.Add(bar);
             _pages["log"] = page;
+            _pageHost.Controls.Add(page);
             _copyLogBtn.Click += (s, e) => { try { System.Windows.Forms.Clipboard.SetText(_log.Text); } catch { } };
             _clearLogBtn.Click += (s, e) => _log.Clear();
         }
@@ -1040,6 +1044,7 @@ namespace DLSS5
             card.Controls.Add(links);
             page.Controls.Add(card);
             _pages["about"] = page;
+            _pageHost.Controls.Add(page);
         }
 
         // ---------------------------------------------------------------- backend
