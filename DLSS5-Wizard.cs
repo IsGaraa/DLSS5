@@ -378,8 +378,8 @@ namespace DLSS5
         // ---------------------------------------------------------------- nav & pages
         private void BuildUi()
         {
-            BuildSidebar();
             BuildContent();
+            BuildSidebar();
         }
 
         private void BuildSidebar()
