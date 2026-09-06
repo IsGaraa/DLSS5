@@ -1,0 +1,15 @@
+{
+  "name": "dlss5-ui",
+  "productName": "DLSS 5 Swapper",
+  "version": "2.0.0",
+  "description": "DLSS 5 Swapper desktop UI (Deep Fried Chicken / RenoDX)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "PaulAchitei",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}
