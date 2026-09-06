@@ -97,38 +97,6 @@ namespace DLSS5
         }
     }
 
-    internal class NavButton : Control
-    {
-        private bool _hover;
-        public bool Active { get; set; }
-        public string Glyph { get; set; }
-
-        public NavButton()
-        {
-            Height = 40;
-            Cursor = Cursors.Hand;
-            DoubleBuffered = true;
-            SetStyle(ControlStyles.ResizeRedraw, true);
-        }
-
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color bg = Active ? Ui.AccentDim : (_hover ? Color.FromArgb(24, 29, 41) : Ui.Sidebar);
-            using (var br = new SolidBrush(bg)) g.FillRectangle(br, new Rectangle(4, 4, Width - 27, Height - 8));
-            if (Active)
-                using (var pn = new Pen(Ui.Accent, 2)) g.DrawLine(pn, 5, 9, 5, Height - 9);
-            var accent = Active ? Ui.Accent : Ui.Muted;
-            var color = Active ? Ui.Accent : (_hover ? Ui.Text : Ui.Muted);
-            using (var br = new SolidBrush(color)) g.DrawString(Glyph, Ui.Face(8.5f, true), br, new PointF(14, 4));
-            using (var br = new SolidBrush(color)) g.DrawString(Text, Ui.Face(9.5f, Active), br, new PointF(34, 3));
-        }
-    }
-
     internal class Pill : Control
     {
         public Color Fill { get; set; }
@@ -320,7 +288,7 @@ namespace DLSS5
         private GameInfo _selected;
 
         // nav
-        private readonly Dictionary<string, NavButton> _nav = new Dictionary<string, NavButton>();
+        private readonly Dictionary<string, Button> _nav = new Dictionary<string, Button>();
         private readonly Dictionary<string, Panel> _pages = new Dictionary<string, Panel>();
         private Label _pageTitle, _pageSub;
         private Panel _pageHost;
@@ -384,20 +352,31 @@ namespace DLSS5
 
         private void BuildSidebar()
         {
-            var sidebar = new Panel { Dock = DockStyle.Left, Width = 210, BackColor = Ui.Sidebar };
+            var sidebar = new Panel { Dock = DockStyle.Left, Width = 220, BackColor = Ui.Sidebar };
 
-            var logo = new RoundedPanel { Dock = DockStyle.Top, Height = 92, BorderVisible = false, BackColor = Ui.Sidebar };
-            var sq = new RoundedPanel { Left = 20, Top = 22, Width = 34, Height = 34, Radius = 8, BackColor = Ui.Accent, BorderVisible = false };
-            var sqTxt = new Label { Left = 0, Top = 4, Width = 34, Height = 26, TextAlign = ContentAlignment.MiddleCenter, Font = Ui.Face(10f, true), ForeColor = Color.FromArgb(20, 26, 12), Text = "NR" };
+            var logo = new RoundedPanel { Dock = DockStyle.Top, Height = 110, BorderVisible = false, BackColor = Ui.Sidebar };
+            var sq = new RoundedPanel { Left = 20, Top = 34, Width = 42, Height = 42, Radius = 9, BackColor = Ui.Accent, BorderVisible = false };
+            var sqTxt = new Label { Left = 0, Top = 5, Width = 42, Height = 32, TextAlign = ContentAlignment.MiddleCenter, Font = Ui.Face(11f, true), ForeColor = Color.FromArgb(20, 26, 12), Text = "NR" };
             sq.Controls.Add(sqTxt);
-            var t1 = new Label { Left = 66, Top = 22, Width = 130, Height = 20, Font = Ui.Face(13f, true), ForeColor = Ui.Text, Text = "DLSS 5" };
-            var t2 = new Label { Left = 66, Top = 44, Width = 130, Height = 18, Font = Ui.Face(8.5f, true), ForeColor = Ui.Accent, Text = "SWAPPER  ·  DARK" };
+            var t1 = new Label { Left = 74, Top = 34, Width = 130, Height = 22, Font = Ui.Face(16f, true), ForeColor = Ui.Text, Text = "DLSS 5" };
+            var t2 = new Label { Left = 74, Top = 58, Width = 130, Height = 18, Font = Ui.Face(9f, true), ForeColor = Ui.Accent, Text = "S W A P P E R" };
             logo.Controls.Add(sq);
             logo.Controls.Add(t1);
             logo.Controls.Add(t2);
             sidebar.Controls.Add(logo);
 
-            var nav = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(6, 6, 0, 0), BackColor = Ui.Sidebar };
+            var sep1 = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Ui.Border };
+            sidebar.Controls.Add(sep1);
+
+            var nav = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 5 * 44 + 6,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(6, 6, 0, 0),
+                BackColor = Ui.Sidebar
+            };
             var items = new[]
             {
                 new { key = "lib",  label = "Library",  glyph = "◈", page = "lib" },
@@ -408,7 +387,22 @@ namespace DLSS5
             };
             for (int i = 0; i < items.Length; i++)
             {
-                var nb = new NavButton { Text = items[i].label, Glyph = items[i].glyph, Width = 185, Height = 38 };
+                var nb = new Button
+                {
+                    Text = items[i].glyph + "  " + items[i].label,
+                    Width = 202,
+                    Height = 42,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = Ui.Face(10f, false),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Padding = new Padding(17, 0, 0, 0),
+                    Cursor = Cursors.Hand,
+                    BackColor = Ui.Sidebar,
+                    ForeColor = Ui.Muted
+                };
+                nb.FlatAppearance.BorderSize = 0;
+                nb.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 36, 50);
+                nb.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 26, 38);
                 string k = items[i].key, pg = items[i].page;
                 nav.Controls.Add(nb);
                 _nav[k] = nb;
@@ -416,11 +410,17 @@ namespace DLSS5
             }
             sidebar.Controls.Add(nav);
 
+            var sep2 = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Ui.Border };
+            sidebar.Controls.Add(sep2);
+
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 20, BackColor = Ui.Sidebar };
+            sidebar.Controls.Add(spacer);
+
             var foot = new Label
             {
-                Dock = DockStyle.Bottom, Height = 34, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(20, 0, 0, 0), Font = Ui.Face(8f, false), ForeColor = Ui.Muted,
-                Text = "Deep Fried Chicken / RenoDX"
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(22, 0, 0, 18), Font = Ui.Face(8.5f, false), ForeColor = Ui.Muted,
+                Text = "v2 · Deep Fried Chicken / RenoDX"
             };
             sidebar.Controls.Add(foot);
 
@@ -467,9 +467,23 @@ namespace DLSS5
 
         private void Nav(string key)
         {
-            foreach (var kv in _nav) kv.Value.Active = false;
-            NavButton n;
-            if (_nav.TryGetValue(key, out n)) n.Active = true;
+            foreach (var kv in _nav)
+            {
+                kv.Value.BackColor = Ui.Sidebar;
+                kv.Value.ForeColor = Ui.Muted;
+                kv.Value.Font = Ui.Face(10f, false);
+                kv.Value.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 36, 50);
+                kv.Value.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 26, 38);
+            }
+            Button n;
+            if (_nav.TryGetValue(key, out n))
+            {
+                n.BackColor = Ui.Accent;
+                n.ForeColor = Color.FromArgb(18, 24, 10);
+                n.Font = Ui.Face(10f, true);
+                n.FlatAppearance.MouseOverBackColor = Ui.Accent;
+                n.FlatAppearance.MouseDownBackColor = Ui.Accent;
+            }
         }
 
         // ---------------------------------------------------------------- library page
