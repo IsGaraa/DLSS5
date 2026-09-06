@@ -75,9 +75,10 @@ param(
     [string]$Feeder = 'auto',
     [string]$KitPath = '',
     [string]$ExeFilter = '',
-    [switch]$Force,
+[switch]$Force,
     [switch]$DryRun,
     [switch]$Launch,
+    [switch]$Json,
     [switch]$NoColor
 )
 
@@ -86,6 +87,10 @@ $ErrorActionPreference = 'Stop'
 
 $Script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Script:Kit  = if ($KitPath) { $KitPath } else { Join-Path $Script:Root 'kit' }
+
+if ($Json) {
+    try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+}
 
 # Default verified local sources (edit the path in sources.json to change them).
 $Script:SourceDefaults = @{
@@ -100,12 +105,12 @@ $Script:NOT_A_GAME = '^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetu
 $Script:SKIP_DIRS = @('_dlss5_backup','reshade-shaders','host64','node_modules','.git','paks','movies','screenshots','saved','logs','mods','downloads','overwrite','profiles','_redist','prerequisites','directx','redist','redistributables','_commonredist','dotnet','installer_resources','installer','installers','support','vcredist','_support','directx_redist','eaanticheat','easyanticheat','battleye','backup','backups','_backup','bak','old','original','originals')
 
 # ---------------------------------------------------------------------------
-# logging helpers
+# logging helpers (when -Json, humans go to stderr, JSON goes to stdout)
 # ---------------------------------------------------------------------------
-function Write-Step { param([string]$T) Write-Host "[DLSS5] $T" -ForegroundColor Cyan }
-function Write-Ok   { param([string]$T) Write-Host "[DLSS5] $T" -ForegroundColor Green }
-function Write-Warn { param([string]$T) Write-Host "[DLSS5] $T" -ForegroundColor Yellow }
-function Write-Err  { param([string]$T) Write-Host "[DLSS5] $T" -ForegroundColor Red }
+function Write-Step { param([string]$T) if ($Json) { [Console]::Error.WriteLine("[DLSS5] $T") } else { Write-Host "[DLSS5] $T" -ForegroundColor Cyan } }
+function Write-Ok   { param([string]$T) if ($Json) { [Console]::Error.WriteLine("[DLSS5] $T") } else { Write-Host "[DLSS5] $T" -ForegroundColor Green } }
+function Write-Warn { param([string]$T) if ($Json) { [Console]::Error.WriteLine("[DLSS5] $T") } else { Write-Host "[DLSS5] $T" -ForegroundColor Yellow } }
+function Write-Err  { param([string]$T) if ($Json) { [Console]::Error.WriteLine("[DLSS5] $T") } else { Write-Host "[DLSS5] $T" -ForegroundColor Red } }
 
 function Fail { param([string]$T) Write-Err $T; exit 1 }
 
@@ -909,16 +914,31 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
     [void]$manifest.added.Add($presetPath.Substring($GameDir.Length).TrimStart('\'))
 
-    $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Get-ManifestPath $GameDir) -Encoding UTF8
+$manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Get-ManifestPath $GameDir) -Encoding UTF8
 
-    Write-Ok "Installed into $exeDir"
-    Write-Step "Provider : $Provider"
-    if ($Provider -eq 'chicken') { Write-Step "Passes   : $Passes (deep-fried-chicken.cfg layers)" }
-    Write-Step "Feeder   : $([bool]$useFeeder)"
-    Write-Step "Logs     : $exeDir\dlss5-feed.log"
-    Write-Step "Verify   : .\DLSS5-Swapper.ps1 -Verify -GamePath `"$GameDir`""
+    if (-not $DryRun) {
+        Write-Ok "Installed into $exeDir"
+        Write-Step "Provider : $Provider"
+        if ($Provider -eq 'chicken') { Write-Step "Passes   : $Passes (deep-fried-chicken.cfg layers)" }
+        Write-Step "Feeder   : $([bool]$useFeeder)"
+        Write-Step "Logs     : $exeDir\dlss5-feed.log"
+        Write-Step "Verify   : .\DLSS5-Swapper.ps1 -Verify -GamePath `"$GameDir`""
+    }
 
     if ($Launch) { Start-Process -FilePath $exe.Path -WorkingDirectory $exeDir }
+
+    return [pscustomobject]@{
+        action = 'install'
+        gameDir = $GameDir
+        exe = $exe.Name
+        api = $apiLabel
+        provider = $Provider
+        passes = $Passes
+        feeder = [bool]$useFeeder
+        added = @($manifest.added)
+        dryRun = [bool]$DryRun
+        manifestPath = (Get-ManifestPath $GameDir)
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -960,9 +980,11 @@ function Invoke-VerifyStack {
         $checks += [pscustomobject]@{ Item = 'ReShade.ini LoadFromDllMain'; Ok = ($ini -match 'LoadFromDllMain=.+addon64'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
     }
 
-    foreach ($c in $checks) {
-        $color = if ($c.Ok) { 'Green' } else { 'Red' }
-        Write-Host ("  {0,-30} {1}  {2}" -f $c.Item, ($(if ($c.Ok) { 'OK ' } else { 'FAIL' })), $c.Note) -ForegroundColor $color
+if (-not $Json) {
+        foreach ($c in $checks) {
+            $color = if ($c.Ok) { 'Green' } else { 'Red' }
+            Write-Host ("  {0,-30} {1}  {2}" -f $c.Item, ($(if ($c.Ok) { 'OK ' } else { 'FAIL' })), $c.Note) -ForegroundColor $color
+        }
     }
 
     # conflict detection
@@ -971,15 +993,27 @@ function Invoke-VerifyStack {
     if ($neural.Count -gt 1) { Write-Err "!! Multiple neural providers active: $($neural.Name -join ', ') - only one may be present. Chicken stays inert beside RenoDX." }
     elseif ($neural.Count -eq 1) { Write-Ok "Neural provider: $($neural[0].Name)" }
 
-    foreach ($logName in @('dlss5-feed.log','deep-fried-chicken.log')) {
-        $log = Join-Path $exeDir $logName
-        if (Test-Path -LiteralPath $log) {
-            Write-Step "--- $logName (tail) ---"
-            Get-Content -LiteralPath $log -Tail 8 | ForEach-Object { Write-Host ("  " + $_) }
+    if (-not $Json) {
+        foreach ($logName in @('dlss5-feed.log','deep-fried-chicken.log')) {
+            $log = Join-Path $exeDir $logName
+            if (Test-Path -LiteralPath $log) {
+                Write-Step "--- $logName (tail) ---"
+                Get-Content -LiteralPath $log -Tail 8 | ForEach-Object { Write-Host ("  " + $_) }
+            }
         }
     }
-    if ($manifest) {
+if ($manifest) {
         Write-Step "Manifest: provider=$($manifest.provider) api=$($manifest.api) feeder=$($manifest.feeder) files=$($manifest.added.Count)"
+    }
+
+    return [pscustomobject]@{
+        action = 'verify'
+        gameDir = $GameDir
+        exe = $exe.Name
+        api = $exe.Label
+        checks = @($checks)
+        provider = if ($manifest) { $manifest.provider } else { $null }
+        installed = [bool]$manifest
     }
 }
 
@@ -1002,8 +1036,9 @@ function Invoke-UninstallStack {
         New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
         if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $dst -Force }
     }
-    Remove-Item -LiteralPath $backDir -Recurse -Force
+Remove-Item -LiteralPath $backDir -Recurse -Force
     Write-Ok "Uninstalled. Original files restored."
+    return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($manifest.added); restored = @($manifest.replaced) }
 }
 
 # ---------------------------------------------------------------------------
@@ -1027,6 +1062,17 @@ if ($Scan -or ($Install -and $GamePath) -or $Verify -or $Uninstall) {
 
 if ($Scan) {
     $s = Get-GameScan $gameDir
+    if ($Json) {
+        [pscustomobject]@{
+            action = 'scan'
+            gameDir = $gameDir
+            chosen = $s.Chosen
+            candidates = @($s.Candidates)
+            hasNativeDlss = [bool]$s.HasNativeDlss
+            reshade = [pscustomobject]@{ present = [bool]$s.ReShade.Installed; file = $s.ReShade.File; version = $s.ReShade.Version }
+        } | ConvertTo-Json -Compress -Depth 6
+        exit 0
+    }
     Write-Step "Scan: $gameDir"
     Write-Host ("  {0,-24} {1,-8} {2,-20} {3}" -f 'exe','bits','api','via')
     foreach ($c in $s.Candidates) {
@@ -1045,17 +1091,27 @@ if ($Install) {
         Write-Warn "Kit not built yet. Building now..."
         New-Kit
     }
-    Install-Stack -GameDir $gameDir -ApiOverride $apiArg -Provider $Provider -Passes $Passes `
+    $r = Install-Stack -GameDir $gameDir -ApiOverride $apiArg -Provider $Provider -Passes $Passes `
         -WorkPercent $WorkResolution -StyleIndex $styleIndex -NrxPreset $Preset `
         -NrxIntensity $Intensity -SymMv $MVProvider -SymCleanFry $CleanFry `
         -SymTexBoost $TextureBoost -SymUplift $NeuralUplift -FeederMode $Feeder -ExeName $Exe
-    if ($DryRun) { }
+    if ($Json -and $r) { $r | ConvertTo-Json -Compress -Depth 6 }
     exit 0
 }
 
-if ($Verify)   { Invoke-VerifyStack $gameDir; exit 0 }
-if ($Uninstall -and -not $DryRun) { Invoke-UninstallStack $gameDir; exit 0 }
-if ($Uninstall -and $DryRun) { Write-Step "[dry] would uninstall $gameDir"; exit 0 }
+if ($Verify) {
+    $v = Invoke-VerifyStack $gameDir
+    if ($Json -and $v) { $v | ConvertTo-Json -Compress -Depth 6 }
+    exit 0
+}
+if ($Uninstall) {
+    if ($DryRun) { Write-Step "[dry] would uninstall $gameDir" }
+    else {
+        $u = Invoke-UninstallStack $gameDir
+        if ($Json -and $u) { $u | ConvertTo-Json -Compress -Depth 6 }
+    }
+    exit 0
+}
 
 Write-Host "DLSS 5 Swapper"
 Write-Host "  .\DLSS5-Swapper.ps1 -BuildKit"
