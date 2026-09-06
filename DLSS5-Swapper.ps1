@@ -78,6 +78,9 @@ param(
 [switch]$Force,
     [switch]$DryRun,
     [switch]$Launch,
+    [switch]$Discover,
+    [string]$ScanRoot = '',
+    [int]$Depth = 6,
     [switch]$Json,
     [switch]$NoColor
 )
@@ -937,7 +940,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
     [void]$manifest.added.Add($presetPath.Substring($GameDir.Length).TrimStart('\'))
 
-$manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Get-ManifestPath $GameDir) -Encoding UTF8
+if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Get-ManifestPath $GameDir) -Encoding UTF8 }
 
     if (-not $DryRun) {
         Write-Ok "Installed into $exeDir"
@@ -954,7 +957,7 @@ $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Get-ManifestPath
         action = 'install'
         gameDir = $GameDir
         exe = $exe.Name
-        api = $apiLabel
+        api = $label
         provider = $Provider
         passes = $Passes
         feeder = [bool]$useFeeder
@@ -1065,6 +1068,130 @@ Remove-Item -LiteralPath $backDir -Recurse -Force
 }
 
 # ---------------------------------------------------------------------------
+# discovery - launcher roots and/or full disk scan for game folders
+# ---------------------------------------------------------------------------
+function Get-SteamLibs {
+    $libs = New-Object System.Collections.Generic.List[string]
+    foreach ($vdf in @(
+            'C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf',
+            'C:\Program Files\Steam\steamapps\libraryfolders.vdf')) {
+        if (-not (Test-Path -LiteralPath $vdf)) { continue }
+        try {
+            $txt = Get-Content -LiteralPath $vdf -Raw
+            foreach ($m in [regex]::Matches($txt, '"path"\s*"([^"]+)"')) {
+                $libs.Add(($m.Groups[1].Value -replace '\\\\', '\'))
+            }
+        } catch { Write-Warn "Steam library list unreadable: $vdf" }
+    }
+    if ($libs.Count -eq 0) {
+        foreach ($p in @(
+                'C:\Program Files (x86)\Steam\steamapps\common',
+                'C:\Program Files\Steam\steamapps\common')) {
+            if (Test-Path -LiteralPath $p) { $libs.Add($p) }
+        }
+    }
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($l in $libs) {
+        $common = if ([System.IO.Path]::GetFileName($l) -eq 'common') { $l } else { Join-Path $l 'steamapps\common' }
+        if (Test-Path -LiteralPath $common) { $out.Add($common) }
+    }
+    return $out
+}
+
+function Get-LauncherRoots {
+    return @(
+        'C:\Program Files (x86)\GOG Galaxy\Games',
+        'C:\Program Files\GOG Galaxy\Games',
+        'C:\Program Files\Epic Games',
+        'C:\Program Files\EA Games',
+        'C:\Program Files (x86)\Origin Games',
+        'C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games',
+        'C:\Program Files\Ubisoft\Ubisoft Game Launcher\games'
+    )
+}
+
+$Script:DEEP_SKIP = @('windows','winnt','programdata','$recycle.bin','recovery','system volume information','perflogs','msocache','temp','tmp','windowsapps','appdata','packages','node_modules','.git','dotnet','partial','common files','windows kits','intel','nvidia','amd','dell','hp','nahimic','msi','asus','gigabyte','python','visual studio','clr','.nuget')
+
+function Invoke-Discover {
+    param([string]$Root = '', [int]$Depth = 6)
+    $launcherMode = [string]::IsNullOrEmpty($Root)
+    $found = New-Object System.Collections.Generic.List[object]
+    $scans = New-Object System.Collections.Generic.List[object]
+    $processed = New-Object System.Collections.Generic.HashSet[string]
+    $fail = ''
+
+    function Add-GameDir {
+        param([string]$Dir)
+        $key = $Dir.TrimEnd('\').ToLower()
+        if (-not $processed.Add($key)) { return }
+        Write-Step "Scanning $Dir"
+        try {
+            $s = Get-GameScan $Dir
+            if ($s -and $s.Chosen) {
+                $found.Add($key)
+                $scans.Add([pscustomobject]@{
+                    gameDir = $Dir
+                    chosen = $s.Chosen
+                    candidates = @($s.Candidates)
+                    hasNativeDlss = [bool]$s.HasNativeDlss
+                    reshade = [pscustomobject]@{ present = [bool]($s.ReShade.Installed); file = $s.ReShade.File; version = $s.ReShade.Version }
+                })
+                Write-Ok "Discovered $($s.Chosen.Name)  ($Dir)"
+            }
+        } catch { Write-Warn "No scan for $Dir : $_" }
+    }
+
+    if ($launcherMode) {
+        $roots = @()
+        $roots += Get-SteamLibs
+        foreach ($r in @(Get-LauncherRoots | Where-Object { Test-Path -LiteralPath $_ })) { $roots += $r }
+        if ($roots.Count -eq 0) { Write-Warn "No launcher folders found to scan." }
+        foreach ($r in $roots) {
+            Write-Step "Launcher folder: $r"
+            foreach ($g in @(Get-ChildItem -LiteralPath $r -Directory -Force -ErrorAction SilentlyContinue)) {
+                if ($Script:SKIP_DIRS -contains $g.Name.ToLower()) { continue }
+                Add-GameDir $g.FullName
+            }
+        }
+    } else {
+        try { $rootDir = (Get-Item -LiteralPath $Root).FullName } catch { Fail "Root not found: $Root" }
+        Write-Step "Deep scan: $rootDir (depth $Depth)"
+        $queue = New-Object System.Collections.Generic.Queue[object]
+        $queue.Enqueue([pscustomobject]@{ Path = $rootDir; D = 0 })
+        $scanned = 0
+        while ($queue.Count -gt 0) {
+            $cur = $queue.Dequeue()
+            $dirs = @()
+            try { $dirs = @(Get-ChildItem -LiteralPath $cur.Path -Directory -Force -ErrorAction SilentlyContinue) } catch {}
+            if ($cur.D -ge $Depth) { continue }
+            foreach ($d in $dirs) {
+                $nm = $d.Name.ToLower()
+                if ($nm -eq 'windows' -or $Script:DEEP_SKIP -contains $nm -or $nm.StartsWith('$')) { continue }
+                $queue.Enqueue([pscustomobject]@{ Path = $d.FullName; D = $cur.D + 1 })
+            }
+            try {
+                $hasExe = @(Get-ChildItem -LiteralPath $cur.Path -Filter '*.exe' -File -Force -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notmatch $Script:NOT_A_GAME })
+                if ($hasExe.Count -gt 0) {
+                    Add-GameDir $cur.Path
+                    $scanned++
+                    if ($scanned -ge 600) { Write-Warn "Reached scan limit (600 game folders) - stopping deep scan."; break }
+                }
+            } catch {}
+        }
+        if ($scanned -eq 0) { Write-Warn "No game folders found under $rootDir" }
+    }
+
+    return [pscustomobject]@{
+        action = 'discover'
+        launchers = $launcherMode
+        root = $Root
+        folders = $found.ToArray()
+        scans = $scans.ToArray()
+    }
+}
+
+# ---------------------------------------------------------------------------
 # entry
 # ---------------------------------------------------------------------------
 if ($Help) {
@@ -1075,6 +1202,12 @@ if ($Help) {
 
 if ($BuildKit) { New-Kit; exit 0 }
 if ($ListKit)  { Invoke-ListKit; exit 0 }
+
+if ($Discover) {
+    $d = if ($ScanRoot) { Invoke-Discover -Root $ScanRoot -Depth $Depth } else { Invoke-Discover }
+    if ($Json) { $d | ConvertTo-Json -Compress -Depth 8 }
+    exit 0
+}
 
 if ($Scan -or ($Install -and $GamePath) -or $Verify -or $Uninstall) {
     if (-not $GamePath) { Fail "Missing -GamePath <folder>" }

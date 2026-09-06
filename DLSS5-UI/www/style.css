@@ -323,6 +323,21 @@ body.busy #busy { display: flex; }
 .modal-card h3 { font-size: 16px; margin-bottom: 14px; }
 .modal-card .m-intro { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin-bottom: 14px; word-break: break-all; }
 #m-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.m-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.opt {
+  display: block; width: 100%; text-align: left; padding: 12px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--fg); font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.opt:hover { border-color: var(--accent); background: rgba(52,211,153,.06); }
+.d-root { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.d-root strong { color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+#d-input {
+  flex: 1; min-width: 0; padding: 8px 10px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--fg); font-size: 12.5px; font-family: inherit;
+}
+#d-input:focus { outline: none; border-color: var(--accent); }
 
 .vert { display: flex; flex-direction: column; gap: 8px; }
 .vrow { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }

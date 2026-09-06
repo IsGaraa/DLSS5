@@ -143,6 +143,24 @@ function renderLibrary() {
   $('#lib-status').textContent = state.library.length + ' game' + (state.library.length === 1 ? '' : 's') + ' found';
 }
 
+function scanToEntries(r, dir, via) {
+  const lib = [];
+  for (const c of (r.candidates || [])) {
+    lib.push({
+      dir: dir,
+      path: c.Path,
+      name: c.Name,
+      bit: c.Bitness,
+      api: c.Api || '',
+      label: c.Label || '',
+      via: via || '',
+      native: !!r.hasNativeDlss,
+      reshade: (r.reshade && r.reshade.present) ? { ver: r.reshade.version || '?' } : null
+    });
+  }
+  return lib;
+}
+
 async function rescan() {
   setBusy(true);
   try {
@@ -152,19 +170,7 @@ async function rescan() {
       $('#lib-status').textContent = 'Scanning ' + f.split(/[\\/]/).pop() + ' (' + (i + 1) + '/' + state.folders.length + ')...';
       try {
         const r = await api.invoke('scan', f);
-        for (const c of (r.candidates || [])) {
-          lib.push({
-            dir: f,
-            path: c.Path,
-            name: c.Name,
-            bit: c.Bitness,
-            api: c.Api || '',
-            label: c.Label || '',
-            via: c.Via || '',
-            native: !!r.hasNativeDlss,
-            reshade: (r.reshade && r.reshade.present) ? { ver: r.reshade.version || '?' } : null
-          });
-        }
+        lib.push.apply(lib, scanToEntries(r, f, ''));
         logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe)', 'ok');
       } catch (e) {
         logLine('scan failed: ' + f + ' - ' + e.message, 'err');
@@ -177,6 +183,62 @@ async function rescan() {
   } finally {
     setBusy(false);
   }
+}
+
+// ---------------------------------------------------------------- auto-scan
+function mergeFolders(list) {
+  for (const f of list) {
+    const hit = state.folders.find(x => x.toLowerCase() === String(f).toLowerCase());
+    if (!hit) state.folders.push(f);
+  }
+}
+
+async function runDiscover(root, depth) {
+  setBusy(true);
+  try {
+    $('#lib-status').textContent = root ? 'Auto-scanning ' + root + ' (depth ' + depth + ')...' : 'Auto-scanning launchers...';
+    logLine('discover: ' + (root ? 'deep scan of ' + root + ' ' : 'launcher roots'), '');
+    const r = await api.invoke('discover', root, depth);
+    const scans = (r && r.scans) || [];
+    for (const s of scans) mergeFolders([s.gameDir]);
+    await api.invoke('library-save', state.folders);
+    const was = state.library.length;
+    logLine('discover: ' + scans.length + ' playable folder(s) found, ' + state.folders.length + ' saved to library', 'ok');
+    if (scans.length) await rescan();
+    toast('Auto-scan done \u2014 ' + scans.length + ' game folder(s) found' + (was ? ' (library updated)' : ''));
+  } catch (e) {
+    toast('Auto-scan failed: ' + e.message);
+    logLine('auto-scan failed: ' + e.message, 'err');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function autoScan() {
+  const body = '<div class="m-intro">Auto-discovery scans your installed launchers or a whole drive for playable executables, identifies the renderer, and adds each found folder to the library. Found folders are saved, so a plain rescan later picks up newly installed games.</div>' +
+    '<div class="m-opts"><button class="opt" id="d-launchers">Launchers \u00B7 Steam, GOG, Epic, EA, Ubisoft</button>' +
+    '<button class="opt" id="d-deep">Deep scan \u00B7 a drive or folder</button></div>';
+  showModal('Auto-scan games', body, [{ label: 'Close', cls: 'ghost', action: closeModal }]);
+  $('#d-launchers').onclick = () => { closeModal(); runDiscover(null, 0); };
+  $('#d-deep').onclick = () => {
+    $('#m-body').innerHTML =
+      '<div class="m-intro">Choose a drive or folder to deep-scan (up to 6 sub-folders deep, capped at 600 game folders). Folders without a top-level executable are skipped fast.</div>' +
+      '<div class="d-root"><strong>Root:</strong> <input id="d-input" type="text" value="C:\\" spellcheck="false">' +
+      '<button class="btn ghost" id="d-browse" type="button">Browse\u2026</button></div>' +
+      '<div class="m-btns2"><span class="spacer"></span></div>';
+    const btnBox = $('#m-btns');
+    btnBox.innerHTML = '';
+    btnBox.appendChild(mkBtn('ghost', 'Close', closeModal));
+    btnBox.appendChild(mkBtn('accent', 'Scan', () => {
+      const root = $('#d-input').value.trim();
+      closeModal();
+      if (root) runDiscover(root, 6);
+    }));
+    $('#d-browse').onclick = async () => {
+      const f = await api.invoke('pick-folder');
+      if (f) $('#d-input').value = f;
+    };
+  };
 }
 
 // ---------------------------------------------------------------- install
@@ -367,6 +429,7 @@ function bind() {
   $('#btn-add').onclick = onAddFolder;
   $('#btn-add2').onclick = onAddFolder;
   $('#btn-rescan').onclick = () => rescan();
+  $('#btn-autoscan').onclick = () => autoScan();
   $('#btn-refresh-bk').onclick = () => loadBackups();
   $('#btn-clear-log').onclick = () => {
     $('#console-pre').innerHTML = '';

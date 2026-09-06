@@ -123,6 +123,11 @@ ipcMain.handle('library-load', () => loadLibrary());
 ipcMain.handle('library-save', (e, list) => { saveLibrary(list); return true; });
 
 ipcMain.handle('scan', (e, folder) => runSwapper(['-Scan', '-Json', '-GamePath', folder]));
+ipcMain.handle('discover', (e, root, depth) => {
+  const args = ['-Discover', '-Json'];
+  if (root) { args.push('-Root', root, '-Depth', String(depth || 6)); }
+  return runSwapper(args);
+});
 ipcMain.handle('install', (e, folder, opts) => runSwapper(buildInstallArgs(folder, opts)));
 ipcMain.handle('verify', (e, folder) => runSwapper(['-Verify', '-Json', '-GamePath', folder]));
 ipcMain.handle('uninstall', (e, folder) => runSwapper(['-Uninstall', '-Json', '-GamePath', folder]));
