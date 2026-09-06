@@ -30,7 +30,7 @@
     -WorkResolution 10..150                              (default 100)
     -Style default|natural|cinematic                     (default default)
     -Preset 0..N                                         NR preset index (default 0)
-    -Intensity 1..4                                      NR intensity (default 2)
+    -Intensity 1..4                                      NR intensity (default 1)
     -MVProvider 0..4                                     DLSS5_Feed MV provider
                                                          (default 3 = Lumenite Kernel)
     -CleanFry                                            enable multi-pass cleanup
@@ -65,7 +65,7 @@ param(
     [ValidateSet('default','natural','cinematic')]
     [string]$Style = 'default',
     [int]$Preset = 0,
-    [double]$Intensity = 2.0,
+    [double]$Intensity = 1.0,
     [ValidateRange(0,4)]
     [int]$MVProvider = 3,
     [switch]$CleanFry,

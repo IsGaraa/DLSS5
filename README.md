@@ -72,7 +72,7 @@ From there:
 
 | Action | How |
 |---|---|
-| **Add games** | Click *Add game folder* or *Auto-scan* (launchers or deep scan a drive) |
+| **Add games** | Click *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep scan a drive) |
 | **Rescan** | *Rescan all* re-scans every saved folder (saved scan also loads instantly on startup) |
 | **Install** | Select a game, optionally pick an alternate executable, choose a provider and options, click *Install* |
 | **Verify** | Check what ended up in the folder vs. the manifest |
@@ -144,7 +144,7 @@ UI and for scripting:
 | `-WorkResolution` | 10-150 | 100 | Neural work resolution % |
 | `-Style` | default/natural/cinematic | default | Chicken NR style |
 | `-Preset` | 0+ | 0 | NR preset index |
-| `-Intensity` | 1-4 | 2 | NR intensity |
+| `-Intensity` | 1-4 | 1 | NR intensity |
 | `-MVProvider` | 0-4 | 3 | Feed MV provider (3 = Lumenite Kernel) |
 | `-CleanFry` | switch | off | Chicken multi-pass cleanup |
 | `-TextureBoost` | switch | off | Experimental 8K path |
