@@ -100,7 +100,7 @@ $Script:SourceDefaults = @{
     reshadeVk = 'C:\ProgramData\ReShade'
 }
 
-$Script:NOT_A_GAME = '^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|rapidcrc|autorun|autoplay|quicksfv|readme|config|benchmark|report|helper|service|cleanup|modorganizer|redlauncher|skse\d*_loader|hlds\b|srcds\b|steamerrorreporter|dgvoodoocpl|reshade_setup|.*\.log)/i'
+$Script:NOT_A_GAME = '^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|unitycrashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|rapidcrc|autorun|autoplay|quicksfv|readme|config|benchmark|report|helper|service|cleanup|modorganizer|redlauncher|skse\d*_loader|hlds\b|srcds\b|steamerrorreporter|dgvoodoocpl|reshade_setup)'
 
 $Script:SKIP_DIRS = @('_dlss5_backup','reshade-shaders','host64','node_modules','.git','paks','movies','screenshots','saved','logs','mods','downloads','overwrite','profiles','_redist','prerequisites','directx','redist','redistributables','_commonredist','dotnet','installer_resources','installer','installers','support','vcredist','_support','directx_redist','eaanticheat','easyanticheat','battleye','backup','backups','_backup','bak','old','original','originals')
 
@@ -332,6 +332,26 @@ function Get-IsReShadeProxy {
     try { return (Find-BinaryMarkers -Path $Path -Markers @('ReShade')) } catch { return $false }
 }
 
+function Get-ApiFromEngine {
+    # catch games whose .exe is a launcher/stub; the render API lives in an engine DLL
+    param([string]$Dir, [int]$Bitness)
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir 'UnityPlayer.dll'))) { return $null }
+    $player = Join-Path $Dir 'UnityPlayer.dll'
+    try {
+        if ((Get-PeBitness $player) -ne $Bitness) { return $null }
+    } catch { return $null }
+    $blocked = @('d3d12.dll','d3d11.dll','dxgi.dll','d3d9.dll','d3d8.dll','opengl32.dll','vulkan-1.dll')
+    foreach ($b in $blocked) {
+        if ((Test-Path -LiteralPath (Join-Path $Dir $b)) -and (Get-IsReShadeProxy (Join-Path $Dir $b))) {
+            return $null
+        }
+    }
+    # Unity bundles every backend (D3D11/D3D12/Vulkan/OpenGL); the default Windows
+    # player is D3D11, and the folder already carries no third-party proxy, so the
+    # DXGI hook route is the right default. users can force another API.
+    return [pscustomobject]@{ Item = 'UnityPlayer.dll'; Api = 'dxgi'; Label = 'Unity (DirectX 11/12)'; Via = 'engine' }
+}
+
 function Get-ReShadeInfo {
     param([string]$Dir)
     $hooks = @('dxgi.dll','d3d12.dll','d3d11.dll','d3d9.dll','opengl32.dll','dinput8.dll')
@@ -362,7 +382,10 @@ function Get-GameScan {
             if ($it.Name -match '\.(log|cfg)$') { continue }
             $bitness = Get-PeBitness $it.FullName
             if (-not $bitness) { continue }
-            $detected = Get-DetectedApi $it.FullName
+$detected = Get-DetectedApi $it.FullName
+            if (-not $detected) {
+                $detected = Get-ApiFromEngine -Dir $cur -Bitness $bitness
+            }
             if (-not $detected) {
                 $undetected.Add([pscustomobject]@{ Path=$it.FullName; Name=$it.Name; Size=$it.Length; Depth=$depth; Bitness=$bitness; Api=$null; Label='undetected'; Via='undetected' })
                 continue
