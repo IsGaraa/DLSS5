@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<title>DLSS 5 Swapper</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="busy">
+
+  <div id="titlebar">
+    <div class="tb-logo">NR</div>
+    <div class="tb-title">DLSS 5 Swapper</div>
+    <div class="win-btns">
+      <button id="w-min" title="Minimize">&#xE921;</button>
+      <button id="w-max" title="Maximize">&#xE922;</button>
+      <button id="w-close" title="Close">&#xE8BB;</button>
+    </div>
+  </div>
+
+  <div id="shell">
+    <aside id="sidebar">
+      <div class="logo">
+        <div class="logo-mark">NR</div>
+        <div class="logo-text"><span class="lt-1">DLSS 5</span><span class="lt-2">SWAPPER</span></div>
+      </div>
+      <nav id="nav">
+        <button class="nav-btn active" data-page="lib"><span class="ico">&#x25C8;</span>Library</button>
+        <button class="nav-btn" data-page="install"><span class="ico">&#x25C9;</span>Install</button>
+        <button class="nav-btn" data-page="backups"><span class="ico">&#x25C0;</span>Backups</button>
+        <button class="nav-btn" data-page="console"><span class="ico">&#x25A4;</span>Console</button>
+      </nav>
+      <div class="side-foot">
+        <span class="dot-live"></span>v2 · Deep Fried Chicken / RenoDX
+      </div>
+    </aside>
+
+    <section id="main">
+      <header id="head">
+        <h1 id="page-title">Games library</h1>
+        <p id="page-sub">Folders you added, scanned for executables and renderer.</p>
+      </header>
+
+      <div id="pages">
+
+        <!-- LIBRARY -->
+        <section class="page" id="page-lib">
+          <div class="toolbar">
+            <button id="btn-add" class="btn accent">+&nbsp; Add game folder</button>
+            <button id="btn-rescan" class="btn ghost">Rescan all</button>
+            <span id="lib-status" class="status"></span>
+          </div>
+          <div id="lib-empty" class="empty hidden">
+            <div class="empty-ico">&#x1F3AE;</div>
+            <h2>No games yet</h2>
+            <p>Add a game folder to scan for executables and detect the rendering API.<br>Example: <code>C:\Games\Monsters are Coming Chaos Stacks</code></p>
+            <button id="btn-add2" class="btn accent big">+&nbsp; Add game folder</button>
+          </div>
+          <div id="grid" class="grid"></div>
+        </section>
+
+        <!-- INSTALL -->
+        <section class="page hidden" id="page-install">
+          <div class="inst-wrap">
+            <div class="inst-form card">
+              <div class="card-head">
+                <div id="inst-game"></div>
+                <span id="inst-engine" class="pill dim">no game selected</span>
+              </div>
+
+              <label class="lbl">Neural provider</label>
+              <div class="segment">
+                <button class="seg on" data-prov="chicken">Deep Fried Chicken</button>
+                <button class="seg" data-prov="renodx">RenoDX</button>
+              </div>
+              <div id="opt-chicken" class="optgrp">
+                <label class="lbl">Passes <span id="v-passes" class="val"></span></label>
+                <input id="o-passes" type="range" min="1" max="30" step="1" value="1">
+              </div>
+              <div id="opt-renodx" class="optgrp hidden">
+                <p class="note">RenoDX DLSS5 Generic - single NeuralUplift pass on top of native DLSS.</p>
+              </div>
+
+              <label class="lbl">Rendering API <span class="hint">(leave Auto to use the detected renderer)</span></label>
+              <select id="o-api">
+                <option value="">Auto (from scan)</option>
+                <option value="d3d11">DirectX 11</option>
+                <option value="d3d12">DirectX 12</option>
+                <option value="vulkan">Vulkan</option>
+                <option value="d3d9">DirectX 9</option>
+                <option value="d3d8">DirectX 8</option>
+                <option value="opengl">OpenGL</option>
+              </select>
+
+              <div class="grid2">
+                <div>
+                  <label class="lbl">Work resolution <span id="v-res" class="val"></span></label>
+                  <input id="o-res" type="range" min="10" max="150" step="5" value="100">
+                </div>
+                <div>
+                  <label class="lbl">Style</label>
+                  <select id="o-style">
+                    <option value="default">Default</option>
+                    <option value="natural">Natural</option>
+                    <option value="cinematic">Cinematic</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="lbl">NR preset</label>
+                  <div class="stepper"><button data-min="0" data-max="9" data-tgt="o-preset">&#x2212;</button><input id="o-preset" type="number" min="0" max="9" value="0"><button data-add="1" data-tgt="o-preset">+</button></div>
+                </div>
+                <div>
+                  <label class="lbl">Intensity</label>
+                  <div class="stepper"><button data-min="1" data-max="4" data-tgt="o-intensity" data-step="0.5">&#x2212;</button><input id="o-intensity" type="number" min="1" max="4" step="0.5" value="2"><button data-add="0.5" data-tgt="o-intensity">+</button></div>
+                </div>
+                <div>
+                  <label class="lbl">Feed MV provider</label>
+                  <select id="o-mv">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3  (Lumenite Kernel)</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="lbl">Feeder transport</label>
+                  <select id="o-feeder">
+                    <option value="auto">Auto</option>
+                    <option value="forced">Forced</option>
+                    <option value="off">Off</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="toggles">
+                <label class="check"><input type="checkbox" id="o-cleanfry"><span></span> Clean Fry (multi-pass cleanup)</label>
+                <label class="check"><input type="checkbox" id="o-texboost"><span></span> Texture Boost (experimental 8K)</label>
+                <label class="check"><input type="checkbox" id="o-uplift"><span></span> NeuralUplift (RenoDX only)</label>
+                <label class="check"><input type="checkbox" id="o-force"><span></span> Force (skip warnings)</label>
+                <label class="check"><input type="checkbox" id="o-launch"><span></span> Launch game after install</label>
+              </div>
+
+              <div id="inst-note" class="warn hidden"></div>
+
+              <button id="btn-install" class="btn accent big block">Install</button>
+            </div>
+
+            <div class="inst-console card">
+              <div class="card-head"><span>Live output</span><span id="inst-state" class="pill dim">idle</span></div>
+              <pre id="inst-pre" class="log"></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- BACKUPS -->
+        <section class="page hidden" id="page-backups">
+          <div class="toolbar">
+            <button id="btn-refresh-bk" class="btn ghost">Refresh backups</button>
+            <span id="bk-status" class="status"></span>
+          </div>
+          <div id="bk-empty" class="empty hidden">
+            <div class="empty-ico">&#x1F4C1;</div>
+            <h2>No backups yet</h2>
+            <p>Originals are saved here before every install, so you can always restore.</p>
+          </div>
+          <div id="bk-list" class="grid"></div>
+        </section>
+
+        <!-- CONSOLE -->
+        <section class="page hidden" id="page-console">
+          <div class="toolbar">
+            <button id="btn-clear-log" class="btn ghost">Clear console</button>
+            <span id="con-status" class="status"></span>
+          </div>
+          <pre id="console-pre" class="log full"></pre>
+        </section>
+
+      </div>
+    </section>
+  </div>
+
+  <div id="busy"><div class="spinner"></div></div>
+
+  <div id="modal" class="hidden">
+    <div class="modal-card">
+      <h3 id="m-title"></h3>
+      <div id="m-body"></div>
+      <div id="m-btns"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

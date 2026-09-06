@@ -5,3 +5,7 @@ _DLSS5_Backup/
 *.log
 *_Backup/
 backup/
+
+# electron app
+node_modules/
+DLSS5-UI/library.json
