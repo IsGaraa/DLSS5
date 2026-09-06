@@ -24,6 +24,35 @@ reimplementation of the concepts in
 - **Journaled installs**: every original file is backed up to
   `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
 
+## GUI wizard
+
+Double-click **`DLSS5-Wizard.exe`** for a Windows GUI (compiled from
+`DLSS5-Wizard.cs`, rebuild with `.\Build-UI.ps1`). It drives the same script in
+the background:
+
+1. **Pick a game folder** and press *Scan folder* - it lists every executable
+   found with its detected render API, bitness, native-DLSS and ReShade state,
+   and remembers the best candidate.
+2. **Configure** - provider (Deep Fried Chicken / RenoDX), passes, work
+   resolution, style, preset, intensity, MV provider, feeder mode, force-API
+   override, Clean Fry / Texture Boost / NeuralUplift, dry-run / force / launch.
+3. **Install / Verify / Uninstall** - a live log streams the backend progress,
+   and JSON is parsed back into the UI after each operation.
+
+The wizard calls the script without any switches-driven UI, so the two are
+always in sync.
+
+## Automation
+
+Every command also accepts `-Json`: everything humans would read goes to
+stderr, and a single compact JSON document is emitted on stdout - designed for
+the wizard and for scripting:
+
+```powershell
+.\DLSS5-Swapper.ps1 -Scan -GamePath "C:\Games\SomeGame" -Json
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Passes 3 -Json    # use stderr for progress
+```
+
 ## Usage
 
 ```powershell
