@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'">
 <title>DLSS 5 Swapper</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -51,11 +51,14 @@
             <button id="btn-rescan" class="btn ghost">Rescan all</button>
             <span id="lib-status" class="status"></span>
           </div>
-          <div id="lib-empty" class="empty hidden">
+          <div id="lib-empty" class="empty">
             <div class="empty-ico">&#x1F3AE;</div>
-            <h2>No games yet</h2>
-            <p>Add a game folder to scan for executables and detect the rendering API.<br>Example: <code>C:\Games\Monsters are Coming Chaos Stacks</code></p>
-            <button id="btn-add2" class="btn accent big">+&nbsp; Add game folder</button>
+            <h2>No games in the library</h2>
+            <p>Add a game folder, or press Rescan to detect the main executable in your saved folders and identify the rendering API.<br>Example: <code>C:\Games\Monsters are Coming Chaos Stacks</code></p>
+            <div class="empty-btns">
+              <button id="btn-add2" class="btn accent big">+&nbsp; Add game folder</button>
+              <button id="btn-scan2" class="btn ghost big">Rescan saved folders</button>
+            </div>
           </div>
           <div id="grid" class="grid"></div>
         </section>
@@ -67,6 +70,11 @@
               <div class="card-head">
                 <div id="inst-game"></div>
                 <span id="inst-engine" class="pill dim">no game selected</span>
+              </div>
+
+              <div id="inst-exe-wrap">
+                <label class="lbl" for="o-exe">Launch executable</label>
+                <select id="o-exe"></select>
               </div>
 
               <label class="lbl">Neural provider</label>
