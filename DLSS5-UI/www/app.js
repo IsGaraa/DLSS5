@@ -189,6 +189,13 @@ function scanToEntries(r, dir, via) {
   return lib;
 }
 
+async function scanFolder(f) {
+  const r = await api.invoke('scan', f);
+  const entries = scanToEntries(r, f, '');
+  logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe, ' + entries.length + ' main)', 'ok');
+  return entries;
+}
+
 async function rescan() {
   setBusy(true);
   try {
@@ -197,10 +204,8 @@ async function rescan() {
       const f = state.folders[i];
       if (f) $('#lib-status').textContent = 'Scanning ' + f.split(/[\\/]/).pop() + ' (' + (i + 1) + '/' + state.folders.length + ')...';
       try {
-        const r = await api.invoke('scan', f);
-        const entries = scanToEntries(r, f, '');
+        const entries = await scanFolder(f);
         lib.push.apply(lib, entries);
-        logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe, ' + entries.length + ' main)', 'ok');
       } catch (e) {
         logLine('scan failed: ' + f + ' - ' + e.message, 'err');
       }
@@ -320,7 +325,7 @@ function readInstallOptions() {
     res: parseInt($('#o-res').value, 10),
     style: $('#o-style').value,
     preset: parseInt($('#o-preset').value, 10) || 0,
-    intensity: parseFloat($('#o-intensity').value) || 2,
+    intensity: parseFloat($('#o-intensity').value) || 1,
     mv: $('#o-mv').value,
     feeder: $('#o-feeder').value,
     cleanFry: $('#o-cleanfry').checked,
@@ -516,11 +521,33 @@ function bind() {
 async function onAddFolder() {
   const f = await api.invoke('pick-folder');
   if (!f) return;
-  if (state.folders.indexOf(f) === -1) {
+  const isNew = state.folders.findIndex(x => x.toLowerCase() === f.toLowerCase()) === -1;
+  if (isNew) {
     state.folders.push(f);
     await api.invoke('library-save', state.folders);
   }
-  await rescan();
+  setBusy(true);
+  try {
+    $('#lib-status').textContent = 'Scanning ' + f.split(/[\\/]/).pop() + '...';
+    const entries = await scanFolder(f);
+    if (entries.length) {
+      const byDir = new Map(state.library.map(g => [String(g.dir).toLowerCase(), g]));
+      byDir.set(f.toLowerCase(), entries[0]);
+      state.library = Array.from(byDir.values());
+      logLine('added to library: ' + entries[0].name + ' (' + f + ')', 'ok');
+    } else {
+      logLine('no detectable executable in ' + f + ' - folder saved but no game card', 'warn');
+    }
+    state.savedAt = Date.now();
+    renderLibrary();
+    renderInstall();
+    try { await api.invoke('library-cache-save', { savedAt: state.savedAt, games: state.library }); } catch (e) {}
+  } catch (e) {
+    logLine('scan failed: ' + f + ' - ' + e.message, 'err');
+    toast('Scan failed: ' + e.message);
+  } finally {
+    setBusy(false);
+  }
 }
 
 // ---------------------------------------------------------------- boot
