@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron ."
   },
-  "author": "IsGaraa",
+  "author": "IsGraaa",
   "license": "MIT",
   "devDependencies": {
     "electron": "^34.0.0"
