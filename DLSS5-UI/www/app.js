@@ -326,7 +326,7 @@ function renderInstall() {
     exeWrap.classList.add('hidden');
     return;
   }
-  gd.innerHTML = '<b>' + esc(g.name) + '</b><div class="gc-path" style="margin:4px 0 0">' + esc(g.path) + '</div>';
+  gd.innerHTML = '<b>' + esc(g.name) + '</b>';
   eng.textContent = g.api ? (g.label || g.api) : 'undetected';
   eng.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
   btn.disabled = false;
@@ -515,7 +515,6 @@ function bind() {
   $('#btn-clear-log').onclick = () => {
     $('#console-pre').innerHTML = '';
   };
-  $('#launch-tip .tip-x').onclick = () => { $('#launch-tip').classList.add('hidden'); };
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 

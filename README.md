@@ -1,20 +1,109 @@
 # DLSS 5 Swapper
 
 Self-contained PowerShell installer for the **DLSS 5 Neural Rendering stack** into
-games that do not ship a native DLSS implementation. Built as a Windows-only
-reimplementation of the concepts in
+games that do not ship a native DLSS implementation. Comes with an optional
+Electron desktop UI. Built as a Windows-only reimplementation of the concepts in
 [rakanki911/DLSS5-Swapper](https://github.com/rakanki911/DLSS5-Swapper).
 
+![Windows](https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6?logo=windows&logoColor=white)
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
 ![Electron UI](https://img.shields.io/badge/UI-Electron-47848F?logo=electron&logoColor=white)
+![DLSS5](https://img.shields.io/badge/Stack-DLSS5%20Neural%20Rendering-9CE564)
+
+## Quick start
+
+### 1. Get the code
+
+```powershell
+git clone https://github.com/IsGaraa/DLSS5.git
+cd DLSS5
+git lfs pull        # the binary kit ships via Git LFS
+```
+
+> Updating: `git pull` (or launch the UI - it checks for updates and restarts
+> itself when a newer version exists).
+
+### 2. Requirements
+
+| Requirement | Why | Verdict |
+|---|---|---|
+| Windows 10+ x64 | 64-bit hooks and neural runtimes | required |
+| PowerShell 5.1+ | the backend is a single `.ps1` | required |
+| Node.js 18+ | the Electron UI | only for the UI |
+| Git + Git LFS | cloning and updating the repo, pulling `kit/` | required |
+| The `kit/` folder | binary DLLs and addons (already in the repo) | ships with clone |
+
+### 3. Launch the UI
+
+From the repo root, double-click:
+
+```
+DLSS5-UI\start.bat
+```
+
+or run it from the `DLSS5-UI` folder:
+
+```
+npm start
+```
+
+The Electron window opens directly (no console window stays open). From there:
+
+| Action | How |
+|---|---|
+| **Add games** | *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep-scan a drive) |
+| **Rescan** | *Rescan all* re-scans every saved folder; the last scan is cached and loads instantly at startup |
+| **Install** | Pick a game, choose a provider and options, click *Install* |
+| **Verify** | Check what ended up in the folder vs. the manifest |
+| **Restore** | Roll back any install from the journaled backup |
+
+### 4. Or use the CLI - no UI needed
+
+Everything the UI does works straight from PowerShell:
+
+```powershell
+# scan a game folder
+.\DLSS5-Swapper.ps1 -Scan -GamePath "C:\Games\SomeGame"
+
+# install (API auto-detected, Deep Fried Chicken by default)
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame"
+
+# 3 neural passes, Lumenite Kernel motion vectors
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Passes 3
+
+# RenoDX with NeuralUplift
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -NeuralUplift
+
+# verify
+.\DLSS5-Swapper.ps1 -Verify -GamePath "C:\Games\SomeGame"
+
+# uninstall / restore the originals
+.\DLSS5-Swapper.ps1 -Uninstall -GamePath "C:\Games\SomeGame"
+
+# auto-discover games from installed launchers
+.\DLSS5-Swapper.ps1 -Discover -Json
+
+# deep-scan C: (depth 6, capped at 600 game folders)
+.\DLSS5-Swapper.ps1 -Discover -Root "C:\" -Depth 6 -Json
+```
+
+Add `-DryRun` to any install to preview changes without touching the disk, and
+`-Launch` to start the game right after installing.
+
+## Screenshots
+
+![Game library - cover-style tiles with executable icons](screenshots/app-library.png)
+
+![Install page - provider, passes, and executable picker](screenshots/app-install.png)
 
 ## Features
 
 - **Render API auto-detection** - PE import / delay-load / binary-string analysis
   for every `.exe` in a game folder - DirectX 8/9/10/11/12, Vulkan, OpenGL -
   no per-game database needed.
-- **DLSS 5 transport** - the `DLSS5-Feeder` loadable addon plus the
-  NVIDIA Neural Rendering runtimes (`nvngx_dlss.dll`, `nvngx_dlssnr.dll`).
-  Games with native DLSS skip the feeder and plug straight into the native stream.
+- **DLSS 5 transport** - the `DLSS5-Feeder` loadable addon plus the NVIDIA
+  Neural Rendering runtimes (`nvngx_dlss.dll`, `nvngx_dlssnr.dll`). Games with
+  native DLSS skip the feeder and plug straight into the native stream.
 - **Neural providers** (selectable):
   - `chicken` (default) - **Deep Fried Chicken**, 1-30 sequential neural passes.
   - `renodx` - **RenoDX DLSS5 Generic**, a single NeuralUplift pass.
@@ -39,88 +128,6 @@ reimplementation of the concepts in
   shown on the cover-style library cards.
 - **Startup auto-update** - the UI checks the GitHub remote on launch and
   fast-forwards + restarts itself when a newer version is available.
-
-## Screenshots
-
-![Game library - cover-style tiles with executable icons](screenshots/app-library.png)
-
-![Install page - provider, passes, and executable picker](screenshots/app-install.png)
-
-## Quick start
-
-### 1. Prerequisites
-
-- Windows 10+ (x64)
-- PowerShell 5.1+
-- Node.js 18+ (for the Electron UI)
-- `kit/` folder with the binary kit (built by `-BuildKit`, see below)
-
-### 2. Build the kit (first time only)
-
-```powershell
-.\DLSS5-Swapper.ps1 -BuildKit
-```
-
-This harvests the required DLLs and addons from your local vendor downloads
-(harvest paths in `sources.json`, or the built-in defaults) and places them in
-`kit/`. The kit already ships in the repo (Git LFS), so this is only needed
-when rebuilding it from fresh downloads.
-
-### 3. Launch the UI
-
-```
-DLSS5-UI\start.bat
-```
-
-or from the `DLSS5-UI` folder:
-
-```
-npm start
-```
-
-The Electron window opens (launched directly, so no console window stays open).
-From there:
-
-| Action | How |
-|---|---|
-| **Add games** | Click *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep scan a drive) |
-| **Rescan** | *Rescan all* re-scans every saved folder (saved scan also loads instantly on startup) |
-| **Install** | Select a game, optionally pick an alternate executable, choose a provider and options, click *Install* |
-| **Verify** | Check what ended up in the folder vs. the manifest |
-| **Restore** | Roll back any install from the manifest backup |
-
-### 4. CLI (no UI)
-
-Every command works directly from PowerShell:
-
-```powershell
-# scan
-.\DLSS5-Swapper.ps1 -Scan -GamePath "C:\Games\SomeGame"
-
-# install (auto-detect API, chicken by default)
-.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame"
-
-# 3 passes, Lumenite Kernel motion vectors
-.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Passes 3
-
-# RenoDX with NeuralUplift
-.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -NeuralUplift
-
-# verify
-.\DLSS5-Swapper.ps1 -Verify -GamePath "C:\Games\SomeGame"
-
-# uninstall / restore
-.\DLSS5-Swapper.ps1 -Uninstall -GamePath "C:\Games\SomeGame"
-
-# auto-discover launchers
-.\DLSS5-Swapper.ps1 -Discover -Json
-
-# deep-scan C: (depth 6, capped at 600 folders)
-.\DLSS5-Swapper.ps1 -Discover -Root "C:\" -Depth 6 -Json
-```
-
-Add `-DryRun` to any install to preview changes without touching the disk, and
-`-Launch` to start the game after installing.
 
 ## Automation (`-Json`)
 
@@ -160,7 +167,7 @@ UI and for scripting:
 | `-CleanFry` | switch | off | Chicken multi-pass cleanup |
 | `-TextureBoost` | switch | off | Experimental 8K path |
 | `-NeuralUplift` | switch | off | RenoDX NeuralUplift |
-| `-KitPath` | path | .\kit | Override the file kit location |
+| `-KitPath` | path | `.\kit` | Override the file kit location |
 | `-Exe` | name.exe | auto | Pick a specific executable |
 | `-DryRun` | switch | off | Do not write anything |
 | `-Force` | switch | off | Proceed despite warnings |
@@ -176,8 +183,8 @@ UI and for scripting:
 
 ## How API detection works
 
-The scan walks the game folder (up to three levels deep) and for each
-`.exe` reads the PE headers directly:
+The scan walks the game folder (up to three levels deep) and for each `.exe`
+reads the PE headers directly:
 
 1. **Imports** - the standard import directory (index 1) and the delay-load
    directory (index 13) are parsed; the first "important" DLL wins:
