@@ -33,7 +33,8 @@ reimplementation of the concepts in
   page.
 - **Instant library** - the last scan is cached, so the UI opens directly on
   your library without re-scanning every folder at startup; hit *Rescan* to
-  refresh.
+  refresh. With no cached library and no folders yet, the UI auto-detects
+  games from your installed launchers automatically.
 - **Executable icons** - real icons are extracted from each game's `.exe` and
   shown on the cover-style library cards.
 
@@ -58,8 +59,10 @@ reimplementation of the concepts in
 .\DLSS5-Swapper.ps1 -BuildKit
 ```
 
-This reads `sources.json`, downloads the required DLLs and addons, and places
-them in `kit/`.
+This harvests the required DLLs and addons from your local vendor downloads
+(harvest paths in `sources.json`, or the built-in defaults) and places them in
+`kit/`. The kit already ships in the repo (Git LFS), so this is only needed
+when rebuilding it from fresh downloads.
 
 ### 3. Launch the UI
 
@@ -230,7 +233,6 @@ DLSS5-UI/            # Electron desktop app
   library.json       #   saved game folders (gitignored)
   library-cache.json #   last scan, loads instantly at startup (gitignored)
 kit/                 # harvested binary kit (built by -BuildKit, tracked via Git LFS)
-sources.json         # download URLs for the kit sources
 ```
 
 ## Credits

@@ -562,10 +562,12 @@ async function onAddFolder() {
     state.library = cache.games;
     state.savedAt = cache.savedAt || null;
     logLine('library loaded from saved scan (' + cache.games.length + ' games) - rescan to refresh', 'ok');
+  } else if (state.folders.length) {
+    logLine('no saved scan yet - auto-scanning your folders', '');
+    rescan();
   } else {
-    logLine(state.folders.length
-      ? 'no saved scan yet - click Rescan to scan your folders'
-      : 'no folders configured yet - add a game folder', '');
+    logLine('no folders configured - auto-detecting games from installed launchers', '');
+    runDiscover(null, 0);
   }
   renderLibrary();
   setBusy(false);
