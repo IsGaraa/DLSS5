@@ -187,10 +187,6 @@ function gameCard(g) {
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
   if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
 
-  const pth = document.createElement('div');
-  pth.className = 'gc-path';
-  pth.textContent = g.path;
-
   const btns = document.createElement('div');
   btns.className = 'gc-btns';
   const install = mkBtn('accent', 'Install', () => { state.selected = g; showPage('install'); });
@@ -208,7 +204,6 @@ function gameCard(g) {
 
   body.appendChild(nm);
   body.appendChild(chips);
-  body.appendChild(pth);
   body.appendChild(btns);
 
   card.appendChild(thumb);
