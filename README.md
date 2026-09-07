@@ -37,6 +37,12 @@ reimplementation of the concepts in
 - **Executable icons** - real icons are extracted from each game's `.exe` and
   shown on the cover-style library cards.
 
+## Screenshots
+
+![Game library - cover-style tiles with executable icons](screenshots/library.png)
+
+![Install page - provider, passes, and executable picker](screenshots/install.png)
+
 ## Quick start
 
 ### 1. Prerequisites
