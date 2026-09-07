@@ -11,6 +11,8 @@
   <div id="titlebar">
     <div class="tb-logo">NR</div>
     <div class="tb-title">DLSS 5 Swapper</div>
+    <div class="tb-spacer"></div>
+    <button id="upd-pill" class="upd-pill hidden" title="Apply the latest update and restart">&#x2B06;&nbsp;<span>Update</span></button>
     <div class="win-btns">
       <button id="w-min" title="Minimize">&#xE921;</button>
       <button id="w-max" title="Maximize">&#xE922;</button>
@@ -50,6 +52,10 @@
             <button id="btn-autoscan" class="btn ghost">&#x1F50D;&nbsp; Auto-scan</button>
             <button id="btn-rescan" class="btn ghost">Rescan all</button>
             <span id="lib-status" class="status"></span>
+          </div>
+          <div id="launch-tip" class="tip">
+            <span>Start the UI from the <code>DLSS5-UI</code> folder (<code>start.bat</code> or <code>npm start</code>), or drive everything from PowerShell: <code>.\DLSS5-Swapper.ps1 -Scan -GamePath &quot;...&quot;</code>, <code>-Install</code>, <code>-Verify</code>, <code>-Uninstall</code>.</span>
+            <button class="tip-x" title="Hide">&#x2715;</button>
           </div>
           <div id="lib-empty" class="empty">
             <div class="empty-ico">&#x1F3AE;</div>

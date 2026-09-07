@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const SWAPPER = path.join(__dirname, '..', 'DLSS5-Swapper.ps1');
+const REPO_ROOT = path.join(__dirname, '..');
 const LIB_FILE = path.join(__dirname, 'library.json');
 const CACHE_FILE = path.join(__dirname, 'library-cache.json');
 const ICONS_DIR = path.join(__dirname, 'www', 'icons');
@@ -83,6 +84,51 @@ function loadLibraryCache() {
 }
 function saveLibraryCache(data) {
   fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function runGit(args) {
+  return new Promise((resolve, reject) => {
+    const env = Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' });
+    const g = spawn('git', ['-C', REPO_ROOT].concat(args), { windowsHide: true, env });
+    let out = '', err = '';
+    g.stdout.setEncoding('utf8');
+    g.stderr.setEncoding('utf8');
+    g.stdout.on('data', d => out += d);
+    g.stderr.on('data', d => err += d);
+    g.on('error', reject);
+    g.on('close', code => {
+      if (code !== 0) return reject(new Error(err.trim() || out.trim() || ('git exited with code ' + code)));
+      resolve(out.trim());
+    });
+  });
+}
+
+async function checkForUpdate() {
+  try {
+    const inRepo = await runGit(['rev-parse', '--is-inside-work-tree']).then(() => true, () => false);
+    if (!inRepo) return { status: 'not-git' };
+    const from = await runGit(['rev-parse', 'HEAD']);
+    await runGit(['fetch', 'origin', 'main']);
+    const to = await runGit(['rev-parse', 'origin/main']);
+    if (from === to) return { status: 'current', from: from, to: to, behind: 0 };
+    const count = await runGit(['rev-list', '--count', 'HEAD..origin/main']);
+    return { status: 'update-available', from: from, to: to, behind: parseInt(count || '0', 10) };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
+async function applyUpdate() {
+  try {
+    const branch = await runGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (branch !== 'main') return { ok: false, message: 'Not on branch "' + branch + '" - switch to main to update.' };
+    await runGit(['merge', '--ff-only', 'origin/main']);
+    runGit(['lfs', 'pull']).catch(() => {});
+    setTimeout(() => { app.relaunch({ args: process.argv.slice(1) }); app.exit(0); }, 900);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
 }
 
 function listBackups(folders) {
@@ -221,6 +267,8 @@ ipcMain.handle('library-save', (e, list) => { saveLibrary(list); return true; })
 ipcMain.handle('library-cache-load', () => loadLibraryCache());
 ipcMain.handle('library-cache-save', (e, data) => { saveLibraryCache(data); return true; });
 ipcMain.handle('get-icon', (e, exePath) => getIconUrl(exePath));
+ipcMain.handle('check-update', () => checkForUpdate());
+ipcMain.handle('apply-update', () => applyUpdate());
 
 ipcMain.handle('scan', (e, folder) => runSwapper(['-Scan', '-Json', '-GamePath', folder]));
 ipcMain.handle('discover', (e, root, depth) => {

@@ -36,6 +36,38 @@ function toast(msg, ms) {
 }
 function setBusy(b) { document.body.classList.toggle('busy', b); }
 
+async function checkForUpdates() {
+  let info;
+  try { info = await api.checkUpdate(); }
+  catch (e) { logLine('update check failed: ' + e.message, 'err'); return; }
+  if (!info) return;
+  if (info.status === 'update-available') {
+    logLine('update available: ' + info.behind + ' commit(s) behind', 'ok');
+    const pill = $('#upd-pill');
+    pill.classList.remove('hidden');
+    pill.onclick = applyUpdate;
+    toast('Update available \u2014 applying, restarting\u2026', 2400);
+    await applyUpdate();
+  } else if (info.status === 'current') {
+    logLine('up to date (' + (info.from ? info.from.slice(0, 7) : '?') + ')', 'ok');
+  } else if (info.status === 'not-git') {
+    logLine('not a git checkout - auto-update disabled', '');
+  } else if (info.message) {
+    logLine('update check: ' + info.status + ' \u2014 ' + info.message, 'err');
+  }
+}
+
+async function applyUpdate() {
+  let r;
+  try { r = await api.applyUpdate(); } catch (e) { r = { ok: false, message: e.message }; }
+  if (!r || !r.ok) {
+    toast('Update failed: ' + (r && r.message ? r.message : 'unknown error'));
+    logLine('update failed: ' + (r && r.message ? r.message : 'unknown error'), 'err');
+  } else {
+    toast('Update applied \u2014 restarting\u2026');
+  }
+}
+
 function logLine(text, cls) {
   const s = '<span class="ts">[' + ts() + ']</span> ' + (cls ? '<span class="' + cls + '">' + esc(text) + '</span>' : esc(text));
   const pre = $('#console-pre');
@@ -483,6 +515,7 @@ function bind() {
   $('#btn-clear-log').onclick = () => {
     $('#console-pre').innerHTML = '';
   };
+  $('#launch-tip .tip-x').onclick = () => { $('#launch-tip').classList.add('hidden'); };
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 
@@ -556,6 +589,7 @@ async function onAddFolder() {
   if (!Array.isArray(state.folders)) state.folders = [];
   logLine('DLSS 5 Swapper UI ready \u00B7 backend DLSS5-Swapper.ps1', 'ok');
   logLine('folders: ' + (state.folders.length ? state.folders.join('  \u00B7  ') : 'empty - add a game folder'), '');
+  checkForUpdates();
 
   const cache = await api.invoke('library-cache-load');
   if (cache && Array.isArray(cache.games) && cache.games.length) {
