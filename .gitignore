@@ -1,5 +1,4 @@
 # local harvest - never commit binaries
-/kit/
 _logs/
 _DLSS5_Backup/
 *.log

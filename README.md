@@ -223,7 +223,7 @@ DLSS5-UI/            # Electron desktop app
   start.bat          #   one-click launcher (no console window)
   library.json       #   saved game folders (gitignored)
   library-cache.json #   last scan, loads instantly at startup (gitignored)
-kit/                 # harvested binary kit (not committed; built by -BuildKit)
+kit/                 # harvested binary kit (built by -BuildKit, tracked via Git LFS)
 sources.json         # download URLs for the kit sources
 ```
 
