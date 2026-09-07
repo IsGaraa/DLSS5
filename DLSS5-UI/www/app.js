@@ -13,6 +13,7 @@ window.onerror = (msg, src, line) => {
 const state = {
   folders: [],
   library: [],
+  installed: {},
   selected: null,
   savedAt: null
 };
@@ -26,6 +27,14 @@ const TITLES = {
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function ts() { return new Date().toTimeString().slice(0, 8); }
+
+function fmtSize(n) {
+  if (n == null || isNaN(n)) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1073741824).toFixed(2) + ' GB';
+}
 
 function toast(msg, ms) {
   const t = $('#toast');
@@ -90,6 +99,21 @@ function logCls(l) {
   if (/!!|error|err\b|failed|fail\b|missing|refuse|not found|reject/i.test(l)) return 'err';
   if (/ok\b|installed|restored|done|built|ready|complete/i.test(l)) return 'ok';
   return '';
+}
+
+async function reportBug() {
+  const pre = $('#console-pre');
+  const tail = pre ? pre.textContent.split('\n').slice(-120).join('\n') : '';
+  const payload = {
+    logTail: tail,
+    game: state.selected ? state.selected.name + ' (' + state.selected.dir + ')' : ''
+  };
+  try {
+    const r = await api.reportBug(payload);
+    if (!r || !r.ok) toast('Could not open the bug form: ' + ((r && r.message) || 'unknown'));
+  } catch (e) {
+    toast('Could not open the bug form: ' + e.message);
+  }
 }
 
 // ---------------------------------------------------------------- nav
@@ -160,6 +184,8 @@ function gameCard(g) {
   if (g.reshade) chips.appendChild(chip('blue', 'ReShade ' + g.reshade.ver));
   if (g.bit) chips.appendChild(chip('dim', g.bit + '-bit'));
   if (g.via) chips.appendChild(chip('dim', g.via));
+  const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
+  if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
 
   const pth = document.createElement('div');
   pth.className = 'gc-path';
@@ -169,12 +195,14 @@ function gameCard(g) {
   btns.className = 'gc-btns';
   const install = mkBtn('accent', 'Install', () => { state.selected = g; showPage('install'); });
   const verify = mkBtn('ghost', 'Verify', () => verifyGame(g));
+  const redetect = mkBtn('ghost', '\u21BB Re-detect', () => reDetect(g));
   const open = mkBtn('ghost icon', '\u{1F4C2}', () => api.invoke('open-folder', g.dir));
   const un = mkBtn('danger', 'Restore', () => uninstallGame(g));
   if (!g.reshade && !g.native && g.api) un.textContent = 'Uninstall';
   un.style.marginLeft = 'auto';
   btns.appendChild(install);
   btns.appendChild(verify);
+  btns.appendChild(redetect);
   btns.appendChild(open);
   btns.appendChild(un);
 
@@ -236,6 +264,38 @@ async function scanFolder(f) {
   const entries = scanToEntries(r, f, '');
   logLine('scan ok: ' + f + ' (' + (r.candidates || []).length + ' exe, ' + entries.length + ' main)', 'ok');
   return entries;
+}
+
+async function reDetect(g) {
+  setBusy(true);
+  try {
+    $('#lib-status').textContent = 'Re-detecting ' + g.name + '...';
+    const entries = await scanFolder(g.dir);
+    if (!entries.length) { toast('No detectable executable in ' + g.dir); return; }
+    const i = state.library.findIndex(x => String(x.dir).toLowerCase() === String(g.dir).toLowerCase());
+    if (i >= 0) state.library[i] = entries[0];
+    state.selected = null;
+    state.savedAt = Date.now();
+    renderLibrary();
+    renderInstall();
+    try { await api.invoke('library-cache-save', { savedAt: state.savedAt, games: state.library }); } catch (e) {}
+    toast('Re-detected \u2014 ' + entries[0].name + ' (' + (entries[0].label || entries[0].api) + ')');
+  } catch (e) {
+    toast('Re-detect failed: ' + e.message);
+    logLine('re-detect failed: ' + g.dir + ' - ' + e.message, 'err');
+  } finally {
+    setBusy(false);
+    $('#lib-status').textContent = '';
+  }
+}
+
+async function loadInstalled() {
+  try {
+    const list = await api.invoke('backups', state.folders);
+    state.installed = {};
+    for (const b of list) state.installed[String(b.dir).toLowerCase()] = b;
+  } catch (e) {}
+  renderLibrary();
 }
 
 async function rescan() {
@@ -392,6 +452,7 @@ async function doInstall() {
     toast('OK  \u2014  ' + msg);
     logLine('install OK: ' + msg, 'ok');
     logLine('manifest: ' + (r.manifestPath || ''), 'ok');
+    loadInstalled();
   } catch (e) {
     toast('Install failed: ' + e.message);
     logLine('install failed: ' + e.message, 'err');
@@ -432,6 +493,7 @@ function uninstallGame(g) {
           const r = await api.invoke('uninstall', g.dir);
           toast('Restored ' + (r.restored || []).length + ' original(s), removed ' + (r.removed || []).length + ' file(s).');
           logLine('uninstall ok: ' + g.dir, 'ok');
+          loadInstalled();
         } catch (e) {
           toast('Restore failed: ' + e.message);
           logLine('uninstall failed: ' + e.message, 'err');
@@ -461,12 +523,16 @@ async function loadBackups() {
     pth.textContent = b.dir;
     const chips = document.createElement('div');
     chips.className = 'chips';
-    chips.appendChild(chip('accent', b.count + ' file' + (b.count === 1 ? '' : 's') + ' backed up'));
-    if (b.provider) chips.appendChild(chip('dim', 'provider ' + b.provider));
+    chips.appendChild(chip('accent', b.provider === 'renodx' ? 'RenoDX' : 'Chicken' + (b.apiLabel ? ' \u00B7 ' + b.apiLabel : '')));
+    chips.appendChild(chip('dim', b.count + ' file' + (b.count === 1 ? '' : 's') + ' backed up'));
+    if (b.size) chips.appendChild(chip('dim', fmtSize(b.size)));
+    if (b.date) chips.appendChild(chip('dim', 'installed ' + b.date));
+    if (b.feeder === false) chips.appendChild(chip('blue', 'native DLSS'));
     const btns = document.createElement('div');
     btns.className = 'gc-btns';
+    btns.appendChild(mkBtn('ghost', 'Details', () => backupDetails(b)));
+    btns.appendChild(mkBtn('ghost', 'Find where', () => { try { api.invoke('open-folder', b.dir); } catch (e) {} }));
     btns.appendChild(mkBtn('danger', 'Restore originals', () => restoreBackup(b.dir)));
-    btns.appendChild(mkBtn('ghost icon', '\u{1F4C2}', () => api.invoke('open-folder', b.dir)));
     card.appendChild(name);
     card.appendChild(pth);
     card.appendChild(chips);
@@ -474,6 +540,25 @@ async function loadBackups() {
     wrap.appendChild(card);
   }
   $('#bk-status').textContent = list.length + ' backup' + (list.length === 1 ? '' : 's') + ' found.';
+}
+
+function backupDetails(b) {
+  const added = (b.added || []).map(x =>
+    '<div class="vrow"><span class="ic ok">+</span><span>' + esc(x) + '</span></div>').join('');
+  const replaced = (b.replaced || []).length
+    ? '<h3 class="m-sec">Replaced originals (' + b.replaced.length + ')</h3>' +
+      (b.replaced || []).map(r =>
+        '<div class="vrow"><span class="ic warn">\u2190</span><span>' + esc(r) + '</span></div>').join('')
+    : '';
+  showModal('Backup \u00B7 ' + b.dir.split(/[\\/]/).pop(),
+    '<div class="m-intro">' +
+    '<samp>' + esc(b.provider === 'renodx' ? 'RenoDX' : 'Chicken') + '</samp>' +
+    (b.apiLabel ? ' \u00B7 <samp>' + esc(b.apiLabel) + '</samp>' : '') +
+    (b.exe ? ' \u00B7 ' + esc(b.exe) : '') +
+    '<br>' + b.count + ' file(s) on disk \u00B7 ' + fmtSize(b.size) +
+    (b.date ? ' \u00B7 installed ' + esc(b.date) : '') + '</div>' +
+    '<h3 class="m-sec">Added files (' + (b.added || []).length + ')</h3>' + added + replaced,
+    [{ label: 'Close', cls: 'ghost', action: closeModal }]);
 }
 
 function restoreBackup(dir) {
@@ -487,6 +572,7 @@ function restoreBackup(dir) {
           const r = await api.invoke('uninstall', dir);
           toast('Restored ' + (r.restored || []).length + ' original(s).');
           logLine('restore ok: ' + dir, 'ok');
+          loadInstalled();
         } catch (e) {
           toast(e.message);
         } finally {
@@ -527,6 +613,7 @@ function bind() {
     $('#console-pre').innerHTML = '';
   };
   $('#upd-pill').onclick = () => checkForUpdates(true);
+  $('#btn-bug').onclick = reportBug;
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 
@@ -615,6 +702,7 @@ async function onAddFolder() {
     runDiscover(null, 0);
   }
   renderLibrary();
+  loadInstalled();
   setBusy(false);
   showPage('lib');
 })();

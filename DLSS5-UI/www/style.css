@@ -123,11 +123,18 @@ body {
 
 .side-foot {
   margin-top: auto;
-  display: flex; align-items: center; gap: 7px;
-  padding: 10px 12px 0;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px 12px;
   color: var(--dim); font-size: 10.5px; letter-spacing: .2px;
 }
+.side-foot-line { display: flex; align-items: center; gap: 7px; }
 .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.bug-btn {
+  padding: 5px 8px; font-size: 10.5px; font-weight: 600; color: var(--muted);
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 8px;
+  cursor: pointer; text-align: center; letter-spacing: .3px;
+}
+.bug-btn:hover { color: var(--blue); border-color: var(--blue-dim); background: rgba(78,161,255,.08); }
 
 /* ---------- main ---------- */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
@@ -232,6 +239,7 @@ body {
 .chip.cyan { background: var(--cyan-dim); color: var(--cyan); }
 .chip.amber { background: var(--amber-dim); color: var(--amber); }
 .chip.red { background: var(--red-dim); color: var(--red); }
+.chip.green { background: rgba(156,229,100,.14); color: var(--accent); }
 .chip.dim { background: rgba(255,255,255,.05); color: var(--muted); }
 
 .gc-btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -365,6 +373,8 @@ body.busy #busy { display: flex; }
 }
 .modal-card h3 { font-size: 16px; margin-bottom: 14px; }
 .modal-card .m-intro { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin-bottom: 14px; word-break: break-all; }
+.m-sec { margin: 16px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); }
+.m-sec:first-of-type { margin-top: 0; }
 #m-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .m-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .opt {
@@ -387,6 +397,7 @@ body.busy #busy { display: flex; }
 .vrow .ic { flex: 0 0 18px; text-align: center; font-weight: 800; }
 .vrow .ic.ok { color: var(--accent); }
 .vrow .ic.fail { color: var(--red); }
+.vrow .ic.warn { color: var(--amber); }
 .vrow .note2 { color: var(--dim); margin-left: auto; text-align: right; }
 
 /* ---------- toast ---------- */

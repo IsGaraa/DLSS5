@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('dlss5', {
   getIcon: (exePath) => ipcRenderer.invoke('get-icon', exePath),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   applyUpdate: () => ipcRenderer.invoke('apply-update'),
+  reportBug: (payload) => ipcRenderer.invoke('report-bug', payload),
   onLog: (cb) => ipcRenderer.on('log', (e, line) => cb(line))
 });

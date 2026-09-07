@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 
 const SWAPPER = path.join(__dirname, '..', 'DLSS5-Swapper.ps1');
 const REPO_ROOT = path.join(__dirname, '..');
@@ -135,14 +136,61 @@ function listBackups(folders) {
   const out = [];
   for (const dir of folders) {
     try {
-      const mp = path.join(dir, '_DLSS5_Backup', 'manifest.json');
+      const bdir = path.join(dir, '_DLSS5_Backup');
+      const mp = path.join(bdir, 'manifest.json');
       if (!fs.existsSync(mp)) continue;
-      const arr = JSON.parse(fs.readFileSync(mp, 'utf8'));
-      const items = Array.isArray(arr) ? arr : (arr.entries || []);
-      out.push({ dir, count: items.length, provider: arr && arr.provider, api: arr && arr.api });
+      const arr = JSON.parse(fs.readFileSync(mp, 'utf8').replace(/^\uFEFF/, ''));
+      const added = Array.isArray(arr.added) ? arr.added.map(String) : [];
+      let size = 0;
+      for (const f of fs.readdirSync(bdir)) {
+        try { size += fs.statSync(path.join(bdir, f)).size; } catch (e) {}
+      }
+      out.push({
+        dir,
+        count: added.length,
+        provider: arr && arr.provider,
+        api: arr && arr.api,
+        apiLabel: arr && arr.apiLabel,
+        exe: arr && arr.exe,
+        feeder: arr && arr.feeder,
+        date: arr && arr.date,
+        size,
+        added: added,
+        replaced: Array.isArray(arr.replaced) ? arr.replaced.map(r => (r && r.file) || String(r)) : []
+      });
     } catch (e) {}
   }
   return out;
+}
+
+async function reportBug(payload) {
+  try {
+    const head = await runGit(['rev-parse', '--short', 'HEAD']).catch(() => 'unknown');
+    const remote = await runGit(['rev-parse', '--short', 'origin/main']).catch(() => 'unknown');
+    const logTail = String((payload && payload.logTail) || '').split('\n').slice(-120).join('\n');
+    const body = [
+      '**Describe the bug or feature request**',
+      '',
+      '',
+      '**Environment**',
+      '- **App:** v2 (Electron ' + process.versions.electron + ' / Chromium ' + process.versions.chrome + ' / Node ' + process.versions.node + ')',
+      '- **OS:** ' + os.platform() + ' ' + os.release(),
+      '- **Git:** local ' + head + ' / remote main ' + remote,
+      '- **Game:** ' + ((payload && payload.game) || 'not selected'),
+      '',
+      '**Console log tail**',
+      '',
+      '```',
+      logTail,
+      '```'
+    ].join('\n');
+    const url = 'https://github.com/IsGaraa/DLSS5/issues/new?title=' +
+      encodeURIComponent('[Bug] DLSS 5 Swapper') + '&body=' + encodeURIComponent(body);
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
 }
 
 function iconKey(exePath) {
@@ -280,6 +328,7 @@ ipcMain.handle('install', (e, folder, opts) => runSwapper(buildInstallArgs(folde
 ipcMain.handle('verify', (e, folder) => runSwapper(['-Verify', '-Json', '-GamePath', folder]));
 ipcMain.handle('uninstall', (e, folder) => runSwapper(['-Uninstall', '-Json', '-GamePath', folder]));
 ipcMain.handle('backups', (e, folders) => listBackups(folders));
+ipcMain.handle('report-bug', (e, payload) => reportBug(payload));
 ipcMain.handle('open-folder', (e, folder) => shell.openPath(folder));
 
 ipcMain.handle('win-min', () => win.minimize());
