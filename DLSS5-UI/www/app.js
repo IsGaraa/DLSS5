@@ -36,24 +36,35 @@ function toast(msg, ms) {
 }
 function setBusy(b) { document.body.classList.toggle('busy', b); }
 
-async function checkForUpdates() {
+async function checkForUpdates(manual) {
+  const pill = $('#upd-pill');
+  pill.classList.add('checking');
   let info;
   try { info = await api.checkUpdate(); }
-  catch (e) { logLine('update check failed: ' + e.message, 'err'); return; }
+  catch (e) {
+    pill.classList.remove('checking');
+    logLine('update check failed: ' + e.message, 'err');
+    if (manual) toast('Update check failed: ' + e.message);
+    return;
+  }
+  pill.classList.remove('checking');
   if (!info) return;
   if (info.status === 'update-available') {
     logLine('update available: ' + info.behind + ' commit(s) behind', 'ok');
-    const pill = $('#upd-pill');
-    pill.classList.remove('hidden');
-    pill.onclick = applyUpdate;
+    pill.style.pointerEvents = 'none';
+    pill.innerHTML = '\u2B06&nbsp;<span>Applying\u2026</span>';
+    pill.title = 'Applying the latest update';
     toast('Update available \u2014 applying, restarting\u2026', 2400);
     await applyUpdate();
   } else if (info.status === 'current') {
     logLine('up to date (' + (info.from ? info.from.slice(0, 7) : '?') + ')', 'ok');
+    if (manual) toast('You are up to date');
   } else if (info.status === 'not-git') {
     logLine('not a git checkout - auto-update disabled', '');
+    if (manual) toast('Auto-update disabled (not a git checkout)');
   } else if (info.message) {
     logLine('update check: ' + info.status + ' \u2014 ' + info.message, 'err');
+    if (manual) toast('Update check: ' + info.status);
   }
 }
 
@@ -515,6 +526,7 @@ function bind() {
   $('#btn-clear-log').onclick = () => {
     $('#console-pre').innerHTML = '';
   };
+  $('#upd-pill').onclick = () => checkForUpdates(true);
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 
