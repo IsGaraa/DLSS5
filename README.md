@@ -41,7 +41,7 @@ reimplementation of the concepts in
 
 ![Game library - cover-style tiles with executable icons](screenshots/library.png)
 
-![Install page - provider, passes, and executable picker](screenshots/install.png)
+![Install page - provider, passes, and executable picker](screenshots/install-options.png)
 
 ## Quick start
 
