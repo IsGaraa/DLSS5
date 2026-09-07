@@ -38,11 +38,10 @@ function setBusy(b) { document.body.classList.toggle('busy', b); }
 
 function logLine(text, cls) {
   const s = '<span class="ts">[' + ts() + ']</span> ' + (cls ? '<span class="' + cls + '">' + esc(text) + '</span>' : esc(text));
-  [$('#console-pre'), $('#inst-pre')].forEach(pre => {
-    pre.innerHTML += s + '\n';
-    while (pre.childNodes.length > 600) pre.removeChild(pre.firstChild);
-    pre.scrollTop = pre.scrollHeight;
-  });
+  const pre = $('#console-pre');
+  pre.innerHTML += s + '\n';
+  while (pre.childNodes.length > 600) pre.removeChild(pre.firstChild);
+  pre.scrollTop = pre.scrollHeight;
 }
 function logCls(l) {
   if (/!!|error|err\b|failed|fail\b|missing|refuse|not found|reject/i.test(l)) return 'err';
@@ -483,7 +482,6 @@ function bind() {
   $('#btn-refresh-bk').onclick = () => loadBackups();
   $('#btn-clear-log').onclick = () => {
     $('#console-pre').innerHTML = '';
-    $('#inst-pre').innerHTML = '';
   };
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
