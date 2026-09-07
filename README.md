@@ -37,6 +37,8 @@ reimplementation of the concepts in
   games from your installed launchers automatically.
 - **Executable icons** - real icons are extracted from each game's `.exe` and
   shown on the cover-style library cards.
+- **Startup auto-update** - the UI checks the GitHub remote on launch and
+  fast-forwards + restarts itself when a newer version is available.
 
 ## Screenshots
 
