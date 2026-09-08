@@ -107,9 +107,9 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
 - **Neural providers** (selectable):
   - `chicken` (default) - **Deep Fried Chicken**, 1-30 sequential neural passes.
   - `renodx` - **RenoDX DLSS5 Generic**, a single NeuralUplift pass.
-- **ReShade integration** - dxgi proxy for DirectX 11/12, global / per-user
-  Vulkan layer, `DLSS5_Feed.fx` + `lumenite_Kernel.fx` motion-vector pipeline,
-  `ReShade.ini` / `ReShadePreset.ini` wiring.
+- **ReShade integration** - dxgi proxy for DirectX 11/12 (32-bit and 64-bit),
+  global / per-user Vulkan layer, `DLSS5_Feed.fx` + `lumenite_Kernel.fx`
+  motion-vector pipeline, `ReShade.ini` / `ReShadePreset.ini` wiring.
 - **32-bit game support** - 32-bit titles get DLSS 5 through a 64-bit **host
   helper** (`host64\dlss5-feed-host64.exe` + its own ReShade) installed beside
   the game, with the 32-bit feeder add-on (`dlss5-feed.addon32`) hooked into
@@ -228,12 +228,10 @@ own full neural pass, so quality scales with `-Passes`.
   and the NVIDIA runtimes - while the game folder gets the 32-bit feeder
   (`dlss5-feed.addon32`). The helper does the NGX work over shared memory, so a
 32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
-   and the like. Caveats for 32-bit games: you must first install **32-bit
-   ReShade** with the ReShade installer (it detects 32-bit itself and enables
-   add-on loading; older tool versions asked for this - a bundled 32-bit
-   ReShade hook is planned), and **DirectX 8/9** games are wrapped
-   automatically with **dgVoodoo2** (D3D8/9 -> D3D11). The UI asks for
-   confirmation before installing into a 32-bit game.
+   and the like. A bundled 32-bit ReShade hook (`dxgi.dll`) is deployed next to
+   the exe automatically, and **DirectX 8/9** games are wrapped automatically
+   with **dgVoodoo2** (D3D8/9 -> D3D11). The UI asks for confirmation before
+   installing into a 32-bit game.
 - **dgVoodoo2** - DirectX 8/9 translation for 32-bit games is **not bundled
   with the repo**: antivirus products flag dgVoodoo's DLLs on download (known
   false positives, 29/66 on VirusTotal), so nothing in this repository ever

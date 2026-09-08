@@ -101,6 +101,7 @@ $Script:SourceDefaults = @{
     rpcs3     = 'C:\Users\drago\Downloads\Compressed\rpcs3-v0.0.42-19930-33a723af_win64_msvc'
     gta       = 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced'
     reshadeVk = 'C:\ProgramData\ReShade'
+    reshade32 = 'C:\Users\drago\Downloads\Compressed\ReShade_6.8.0_Addon'
     dgvoodoo  = 'C:\Users\drago\Downloads\Compressed\dgVoodoo2-2.87.4'
 }
 
@@ -517,6 +518,15 @@ if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
         }
     }
 
+    # 32-bit ReShade hook (deployed as dxgi.dll for 32-bit D3D games)
+    $rs32 = Join-Path $src.reshade32 'ReShade32.dll'
+    if (Test-Path -LiteralPath $rs32) { $copy['reshade\dxgi-x86.dll'] = $rs32 }
+    else {
+        $existing = Join-Path $Script:Kit 'reshade\dxgi-x86.dll'
+        if (Test-Path -LiteralPath $existing) { $copy['reshade\dxgi-x86.dll'] = $existing }
+        else { Write-Warn "no source for optional 'reshade\dxgi-x86.dll' and no prior kit copy - 32-bit ReShade hook skipped" }
+    }
+
     foreach ($rel in $copy.Keys) {
         $dest = Join-Path $Script:Kit $rel
         Copy-Item -LiteralPath $copy[$rel] -Destination $dest -Force
@@ -844,7 +854,10 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
 # ReShade injection (recorded so -Uninstall reverts it)
     $reshade = Get-ReShadeInfo $exeDir
     $reshadeRoute = $reshade.Installed -or ($api -eq 'vulkan')
-    if (($api -eq 'd3d8' -or $api -eq 'd3d9') -and $is32Bit -and $Force) { $reshadeRoute = $true }
+    if (($api -eq 'd3d8' -or $api -eq 'd3d9') -and $is32Bit) {
+        if ($Force) { $reshadeRoute = $true }
+        elseif ($hasDg -and ($reshade.Installed -or (Test-Path -LiteralPath (Join-Path $Script:Kit 'reshade\dxgi-x86.dll')))) { $reshadeRoute = $true }
+    }
     if ($api -eq 'vulkan') {
         $vkHub = if ($is32Bit) { 'ReShade32' } else { 'ReShade64' }
         $layer = Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' ($vkHub + '.dll'))
@@ -870,9 +883,15 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         $needsProxy = -not $reshade.Installed
         if ($needsProxy -and -not (Test-Path -LiteralPath (Join-Path $exeDir 'dxgi.dll'))) {
             if ($is32Bit) {
-                Write-Warn "32-bit D3D game: a 32-bit ReShade dxgi hook must be installed first (run the ReShade installer against $($exe.Name) - it detects 32-bit itself and enables add-on loading)."
-                if ($Force) { $reshadeRoute = $true }
-                else { Fail "No 32-bit ReShade dxgi hook present. Install ReShade 32-bit into the game folder, then retry (or use -Force to copy the files anyway)." }
+                if (Test-Path -LiteralPath (Join-Path $Script:Kit 'reshade\dxgi-x86.dll')) {
+                    if ($DryRun) { Write-Step "[dry] would copy 32-bit ReShade dxgi.dll" }
+                    else { Install-OneFile 'reshade\dxgi-x86.dll' 'dxgi.dll' }
+                    $reshadeRoute = $true
+                } else {
+                    Write-Warn "32-bit D3D game: a 32-bit ReShade dxgi hook must be installed first (run the ReShade installer against $($exe.Name) - it detects 32-bit itself and enables add-on loading)."
+                    if ($Force) { $reshadeRoute = $true }
+                    else { Fail "No 32-bit ReShade dxgi hook present and none is bundled (rebuild the kit to get kit\reshade\dxgi-x86.dll). Install ReShade 32-bit into the game folder, then retry (or use -Force to copy the files anyway)." }
+                }
             } else {
                 if ($DryRun) { Write-Step "[dry] would copy ReShade dxgi.dll" }
                 else { Install-OneFile 'reshade\dxgi.dll' 'dxgi.dll' }
@@ -937,6 +956,10 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         $dgFiles = @('D3D9.dll','dgVoodoo.conf','dgVoodooCpl.exe')
         if ($api -eq 'd3d8') { $dgFiles = @('D3D8.dll','D3D9.dll','dgVoodoo.conf','dgVoodooCpl.exe') }
         foreach ($n in $dgFiles) { Install-OneFile "dgvoodoo\$n" $n }
+        # 32-bit ReShade dxgi hook behind the D3D11 translation (unless one is already there)
+        if ($reshadeRoute -and -not $reshade.Installed -and -not (Test-Path -LiteralPath (Join-Path $exeDir 'dxgi.dll'))) {
+            Install-OneFile 'reshade\dxgi-x86.dll' 'dxgi.dll'
+        }
     }
 
     # shaders
@@ -1089,7 +1112,7 @@ $manifest = Get-OldManifest $GameDir
         $checks += [pscustomobject]@{ Item = ($pfx + $n); Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'v' + (Get-FileProductVersion $p) } else { 'MISSING' } }
     }
     if ($exe.Bitness -ne 64) {
-        foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe','host64\dxgi.dll')) {
+        foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe','host64\dxgi.dll','dxgi.dll')) {
             $p = Join-Path $exeDir $n
             $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
         }

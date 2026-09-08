@@ -444,7 +444,7 @@ function doInstall() {
   const bit = opt0 && opt0.dataset ? Number(opt0.dataset.bit || 0) : Number(g.bit || 0);
   const exeName = (opt0 && opt0.value) || g.name;
   if (bit === 32) {
-    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. DLSS 5\u2019s neural stack will run inside a 64-bit <b>host helper</b> (<code>host64\\</code>) that the swapper installs next to the game, and the feeder hooks the 32-bit process itself.<br><br>Notes: 32-bit Direct3D games still need a 32-bit ReShade installed against this exe (the ReShade installer detects 32-bit itself), and DirectX 8/9 games are wrapped automatically with dgVoodoo2 (D3D8/9 -> D3D11). Continue?</div>', [
+    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. DLSS 5\u2019s neural stack will run inside a 64-bit <b>host helper</b> (<code>host64\\</code>) that the swapper installs next to the game, and the feeder hooks the 32-bit process itself.<br><br>Notes: the swapper deploys a bundled <b>32-bit ReShade</b> hook (<code>dxgi.dll</code>) next to the exe automatically, and DirectX 8/9 games are wrapped with <b>dgVoodoo2</b> (D3D8/9 -> D3D11). Both are DLL hooks, so skip this if the game runs anticheat. Continue?</div>', [
       { label: 'Decline', cls: 'ghost', action: closeModal },
       { label: 'Install (host helper)', cls: 'danger', action: () => { closeModal(); runInstall(g, true); } }
     ]);

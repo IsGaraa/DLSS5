@@ -93,5 +93,10 @@
                                    "hash":  "71EF3086CCF86792F5A333346EEBB7B857434583712D3A51B9998DB99E562EDC",
                                    "version":  "",
                                    "size":  2359
-                               }
+                               },
+    "reshade/dxgi-x86.dll":  {
+                                 "hash":  "DA430E0A9C6EECEFA0D1B27D05E16C426FB5D04E808B194D914EAAC4B31BC0F8",
+                                 "version":  "6.8.0.2156",
+                                 "size":  4398080
+                             }
 }
