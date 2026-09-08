@@ -92,9 +92,9 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
 
 ## Screenshots
 
-![Game library - cover-style tiles with executable icons](screenshots/app-library.png)
+![Game library - cover-style tiles with executable icons](screenshots/library-ui.png)
 
-![Install page - provider, passes, and executable picker](screenshots/app-install.png)
+![Install page - provider, passes, and executable picker](screenshots/install-ui.png)
 
 ## Features
 
