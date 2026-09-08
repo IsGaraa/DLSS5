@@ -419,4 +419,19 @@ body.busy #busy { display: flex; }
 .pill.amber { background: var(--amber-dim); color: var(--amber); }
 .pill.dim { background: rgba(255,255,255,.05); color: var(--muted); }
 
+/* ---------- info page ---------- */
+.info-wrap { display: flex; justify-content: center; padding: 28px 0; }
+.info-card { width: min(560px, 100%); padding: 22px 24px; }
+.info-card .card-head { display: flex; align-items: center; gap: 14px; }
+.info-card .card-head h3 { font-size: 15px; }
+.info-card .card-head .pill { margin-top: 3px; }
+.info-table { width: 100%; border-collapse: collapse; margin: 18px 0; }
+.info-table td { padding: 7px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; vertical-align: top; }
+.info-table td:first-child { color: var(--muted); width: 110px; }
+.info-table td:last-child { color: var(--text); word-break: break-all; user-select: text; cursor: default; }
+#info-remote { color: var(--blue); cursor: pointer; }
+#info-remote:hover { text-decoration: underline; }
+.info-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.info-btns .btn { font-size: 12.5px; }
+
 samp { color: var(--accent); }

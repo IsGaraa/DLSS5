@@ -31,10 +31,10 @@
         <button class="nav-btn" data-page="install"><span class="ico">&#x25C9;</span>Install</button>
         <button class="nav-btn" data-page="backups"><span class="ico">&#x25C0;</span>Backups</button>
         <button class="nav-btn" data-page="console"><span class="ico">&#x25A4;</span>Console</button>
+        <button class="nav-btn" data-page="info"><span class="ico">&#x2139;</span>Info</button>
       </nav>
       <div class="side-foot">
         <div class="side-foot-line"><span class="dot-live"></span>v2 · Deep Fried Chicken / RenoDX</div>
-        <button id="btn-bug" class="bug-btn" title="Open a pre-filled GitHub issue with your OS, version and console log">Report a bug</button>
       </div>
     </aside>
 
@@ -181,6 +181,32 @@
             <span id="con-status" class="status"></span>
           </div>
           <pre id="console-pre" class="log full"></pre>
+        </section>
+
+        <!-- INFO -->
+        <section class="page hidden" id="page-info">
+          <div class="info-wrap">
+            <div class="card info-card">
+              <div class="card-head">
+                <span class="logo-mark">NR</span>
+                <div>
+                  <h3 id="info-name">DLSS 5 Swapper</h3>
+                  <span id="info-version" class="pill dim">…</span>
+                </div>
+              </div>
+              <table class="info-table">
+                <tr><td>Electron</td><td id="info-electron">–</td></tr>
+                <tr><td>Chromium</td><td id="info-chrome">–</td></tr>
+                <tr><td>Node</td><td id="info-node">–</td></tr>
+                <tr><td>OS</td><td id="info-os">–</td></tr>
+                <tr><td>Repository</td><td id="info-remote">–</td></tr>
+              </table>
+              <div class="info-btns">
+                <button id="btn-git" class="btn ghost">&#x1F5C2;&nbsp; Open GitHub page</button>
+                <button id="btn-bug2" class="btn ghost">Report a bug</button>
+              </div>
+            </div>
+          </div>
         </section>
 
       </div>

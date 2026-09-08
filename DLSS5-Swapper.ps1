@@ -1196,7 +1196,8 @@ $manifest = Get-OldManifest $GameDir
             $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
         }
     }
-    if ($manifest -and ($manifest.api -eq 'd3d8' -or $manifest.api -eq 'd3d9') -and $manifest.bit -ne 64) {
+    $manBit = if ($manifest -and $manifest.PSObject.Properties['bit']) { $manifest.bit } else { $null }
+    if ($manifest -and ($manifest.api -eq 'd3d8' -or $manifest.api -eq 'd3d9') -and $manBit -ne 64) {
         $dgChecks = @('D3D9.dll','dgVoodoo.conf')
         if ($manifest.api -eq 'd3d8') { $dgChecks = @('D3D8.dll','D3D9.dll','dgVoodoo.conf') }
         foreach ($n in $dgChecks) {
@@ -1262,7 +1263,13 @@ if (-not $Json) {
         }
     }
 if ($manifest) {
-        Write-Step "Manifest: provider=$($manifest.provider) api=$($manifest.api) bit=$($manifest.bit) host64=$($manifest.host64) feeder=$($manifest.feeder) files=$($manifest.added.Count)"
+        # manifests from older tool generations miss fields (e.g. 'bit') - read them defensively
+        $mvals = foreach ($p in @('provider','api','bit','host64','feeder')) {
+            $prop = $manifest.PSObject.Properties[$p]
+            "$p=" + $(if ($prop) { $prop.Value } else { '?' })
+        }
+        $mCount = if ($manifest.PSObject.Properties['added']) { $manifest.added.Count } else { 0 }
+        Write-Step ("Manifest: " + (($mvals + "files=$mCount") -join ' '))
     }
 
     return [pscustomobject]@{

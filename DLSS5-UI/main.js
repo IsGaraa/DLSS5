@@ -197,6 +197,26 @@ async function reportBug(payload) {
   }
 }
 
+async function getAppInfo() {
+  let pkg = {};
+  try { pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')); } catch (e) {}
+  const info = {
+    name: pkg.productName || 'DLSS 5 Swapper',
+    version: pkg.version || '0.0.0',
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    arch: process.arch,
+    os: String(os.version() || os.release())
+  };
+  try {
+    const inRepo = await runGit(['rev-parse', '--is-inside-work-tree']).then(() => true, () => false);
+    info.repo = inRepo ? { remote: await runGit(['remote', 'get-url', 'origin']).catch(() => null) } : null;
+  } catch (e) {}
+  return info;
+}
+
 function iconKey(exePath) {
   return crypto.createHash('sha1').update(String(exePath).toLowerCase()).digest('hex').slice(0, 16);
 }
@@ -333,6 +353,8 @@ ipcMain.handle('verify', (e, folder) => runSwapper(['-Verify', '-Json', '-GamePa
 ipcMain.handle('uninstall', (e, folder) => runSwapper(['-Uninstall', '-Json', '-GamePath', folder]));
 ipcMain.handle('backups', (e, folders) => listBackups(folders));
 ipcMain.handle('report-bug', (e, payload) => reportBug(payload));
+ipcMain.handle('app-info', () => getAppInfo());
+ipcMain.handle('open-url', (e, url) => { if (url) shell.openExternal(String(url)); return true; });
 ipcMain.handle('open-folder', (e, folder) => shell.openPath(folder));
 
 ipcMain.handle('win-min', () => win.minimize());

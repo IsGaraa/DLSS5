@@ -22,7 +22,8 @@ const TITLES = {
   lib: ['Games library', 'Folders you added, scanned for executables and renderer.'],
   install: ['Install options', 'Provider, passes and tuning for the selected game.'],
   backups: ['Backups & history', 'Original files saved before an install - restore them anytime.'],
-  console: ['Console', 'Live output from the DLSS5 backend.']
+  console: ['Console', 'Live output from the DLSS5 backend.'],
+  info: ['About & info', 'App version, runtime and repository details.']
 };
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -126,6 +127,35 @@ function showPage(p) {
   $('#page-sub').textContent = TITLES[p][1];
   if (p === 'backups') loadBackups();
   if (p === 'install') renderInstall();
+  if (p === 'info') loadInfo();
+}
+
+const GIT_HOME = 'https://github.com/IsGaraa/DLSS5';
+
+async function loadInfo() {
+  let info = null;
+  try { info = await api.appInfo(); }
+  catch (e) { logLine('info load failed: ' + e.message, 'err'); }
+  if (!info) return;
+  const set = (id, v) => { $('#info-' + id).textContent = v || '–'; };
+  $('#info-name').textContent = info.name || 'DLSS 5 Swapper';
+  $('#info-version').textContent = 'v' + (info.version || '?');
+  set('electron', info.electron);
+  set('chrome', info.chrome);
+  set('node', info.node);
+  set('os', (info.os || info.platform) + (info.arch ? ' (' + info.arch + ')' : ''));
+  if (info.repo) {
+    set('remote', info.repo.remote);
+  } else {
+    set('remote', null);
+  }
+}
+
+async function openGitPage() {
+  const remote = $('#info-remote').textContent.trim().split('\n')[0];
+  const url = (remote && /^https?:\/\//.test(remote)) ? remote.replace(/\.git$/, '') : GIT_HOME;
+  try { await api.openUrl(url); }
+  catch (e) { toast('Could not open the page: ' + e.message); }
 }
 
 // ---------------------------------------------------------------- library
@@ -627,7 +657,9 @@ function bind() {
     $('#console-pre').innerHTML = '';
   };
   $('#upd-pill').onclick = () => checkForUpdates(true);
-  $('#btn-bug').onclick = reportBug;
+  $('#btn-bug2').onclick = reportBug;
+  $('#btn-git').onclick = openGitPage;
+  $('#info-remote').onclick = openGitPage;
 
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 
