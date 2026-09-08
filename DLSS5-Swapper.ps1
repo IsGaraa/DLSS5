@@ -279,7 +279,7 @@ function Get-ApiFromNames {
 }
 
 function Get-ApiFromMarkers {
-    param([string]$Path)
+    param([string]$Path, [int]$Bitness = 0)
     $markers = @('D3D12CreateDevice','D3D12SDKPath','D3D12SDKVersion','D3D11CreateDevice','D3D10CreateDevice','CreateDXGIFactory','Direct3DCreate9','Direct3DCreate8','vkCreateInstance','wglCreateContext')
     $bytes = [System.IO.File]::ReadAllBytes($Path)
     $l1 = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes)
@@ -291,6 +291,12 @@ $TestMarker = {
     }
     $has = @{}
     foreach ($m in $markers) { $has[$m] = [bool](& $TestMarker $m) }
+# D3D9 wins over D3D10/11 when both are present BUT only for 32-bit exes:
+    # the late-D3D9 era games (GTA IV, Saints Row 2) import d3d10/dxgi as
+    # auxiliary entry points while presenting through D3D9. D3D9 is a 32-bit-only
+    # API, so a 64-bit exe carrying a Direct3DCreate9 marker (e.g. RDR2) is never
+    # a D3D9 renderer - treat it as D3D10/12 (i.e. dxgi) as before.
+    if (($Bitness -eq 32) -and $has['Direct3DCreate9'] -and ($has['D3D10CreateDevice'] -or $has['D3D11CreateDevice'])) { return @{ api='d3d9'; label='DirectX 9'; via='strings' } }
     if ($has['D3D12CreateDevice'] -or $has['D3D12SDKPath'] -or $has['D3D12SDKVersion']) { return @{ api='dxgi'; label='DirectX 12'; via='strings' } }
     if ($has['D3D11CreateDevice']) { return @{ api='dxgi'; label='DirectX 11'; via='strings' } }
     if ($has['D3D10CreateDevice']) { return @{ api='d3d10'; label='DirectX 10'; via='strings' } }
@@ -324,11 +330,11 @@ function Test-VulkanWrapper {
 }
 
 function Get-DetectedApi {
-    param([string]$ExePath)
+    param([string]$ExePath, [int]$Bitness = 0)
     $imports = Get-AsciiImports -Path $ExePath
     $d = Get-ApiFromNames -Imports $imports
     if ($d) { return $d }
-    $d = Get-ApiFromMarkers -Path $ExePath
+    $d = Get-ApiFromMarkers -Path $ExePath -Bitness $Bitness
     if ($d) { return $d }
     return $null
 }
@@ -388,7 +394,7 @@ function Get-GameScan {
             if ($it.Name -match '\.(log|cfg)$') { continue }
             $bitness = Get-PeBitness $it.FullName
             if (-not $bitness) { continue }
-$detected = Get-DetectedApi $it.FullName
+$detected = Get-DetectedApi $it.FullName $bitness
             if (-not $detected) {
                 $detected = Get-ApiFromEngine -Dir $cur -Bitness $bitness
             }
@@ -752,12 +758,28 @@ function Install-Stack {
     $exeDir = Split-Path -Parent $exe.Path
     Write-Step "Game: $($exe.Name) | bitness $($exe.Bitness) | detected: $($exe.Label) ($($exe.Via))"
 
-    $api = $ApiOverride
+$api = $ApiOverride
     if ($api -eq 'auto') {
         if (-not $exe.Api) {
             Fail "API could not be detected for $($exe.Name). Pass -Api (e.g. -Api d3d12 or -Api vulkan)."
         }
         $api = $exe.Api
+        # Hybrid games: some ship both D3D11/12 and a Vulkan renderer (e.g. RDR2,
+        # GTA V, Hitman). If D3D was detected but the exe also imports vulkan-1.dll
+        # and a ReShade Vulkan layer is registered, the game's actual presenting
+        # renderer is usually Vulkan - route through the layer, NOT a local dxgi
+        # proxy. A local dxgi.dll would load a second ReShade into the process and
+        # the two instances fight ("Another ReShade instance was already loaded...");
+        # the D3D12/Vulkan journal also shows RDR2 runs with <API>kSettingAPI_Vulkan</API>.
+        $importsVulkan = Find-BinaryMarkers -Path $exe.Path -Markers @('vkCreateInstance') -Any $true
+        if (($api -eq 'dxgi') -and $importsVulkan) {
+            $hasVkLayer = (Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' 'ReShade64.dll')) -or
+                          (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.dlss5vulkanlayer\ReShade64.dll'))
+            if ($hasVkLayer) {
+                Write-Step "Detected a Vulkan-capable hybrid (Dxgi + vulkan-1.dll) and a registered ReShade Vulkan layer; routing through the Vulkan layer for $($exe.Name)."
+                $api = 'vulkan'
+            }
+        }
     }
     switch ($api) {
         'd3d10' { $api = 'dxgi'; $label = 'DirectX 10' }
@@ -1001,6 +1023,14 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
             'PresetPath'        = '.\ReShadePreset.ini'
             'PreprocessorDefinitions' = "DLSS5_MV_PROVIDER=$MVProvider"
         }
+    }
+    if ($api -eq 'vulkan') {
+        # The Vulkan layer is registered machine-wide (ProgramData) or per-user.
+        # Its injection DLL sits elsewhere, so point ReShade's base path at the game
+        # folder: ReShade otherwise defaults the layer base to the DLL directory and
+        # would (a) abort the load-check for lack of a ReShade.ini next to the layer
+        # DLL and (b) ignore the game-folder ReShade.ini/addons/shaders entirely.
+        $sections['INSTALL'] = @{ 'BasePath' = $exeDir }
     }
     if ($earlyLoadAddon) { $sections['ADDON']['LoadFromDllMain'] = $earlyLoadAddon }
     $styleNum = switch ($StyleIndex) { 1 { 1 } 2 { 2 } default { 0 } }

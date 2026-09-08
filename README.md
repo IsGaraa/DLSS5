@@ -275,6 +275,31 @@ own full neural pass, so quality scales with `-Passes`.
 - Games with **anti-cheat** (BattlEye etc.) may reject injected modules; use
   the offline/Story modes where available.
 
+### 32-bit / host-helper path: known issues (future fix)
+
+The 32-bit host-helper path is **experimental** and only partially working.
+Verified on GTA IV; treat it as a known-broken area marked for a **future fix**:
+
+- **DLSS 5 often "does nothing" visually.** ReShade loads, the feeder runs and
+  the host renders DLAA frames, but the output looks unchanged. On GTA IV the
+  measured cause was the neural consumer: `renodx-dlss5` v4.7 (RenoDX provider)
+  faulted inside the neural evaluate (access violation in `D3D12Core.dll` via
+  `nvngx_dlssnr.dll`) with current NVIDIA drivers. **Deep Fried Chicken** (the
+  default `chicken` provider) works with the same driver - use `-Provider chicken`
+  for 32-bit host games. Driver 616.56 also passes with either provider.
+- **No RenoDX.DLSS5 tab in the game's overlay.** For a 32-bit game the provider
+  add-on runs in the hidden `host64\dlss5-feed-host64.exe` helper process, not in
+  the game - so the game's ReShade overlay only lists the feed add-on under
+  *Addons*, and the RenoDX/Chicken panel you expect never appears there. Tuning
+  is done by editing `host64\deep-fried-chicken.cfg` next to the exe.
+- **Host window / focus chaos.** The helper spawns behind the game, and some
+  titles (GTA IV: fullscreen -> windowed -> taskbar -> stuck at the menu) fight
+  the hidden host window for focus once the game starts. Launch through the
+  game's launcher/Steam; launching the raw exe may also crash the game even
+  without any of this installed.
+- Until these are fixed, prefer 64-bit titles - the 64-bit path (in-game hook,
+  visible RenoDX/Chicken tab, no host helper) is the reliable one.
+
 ## Repository layout
 
 ```
