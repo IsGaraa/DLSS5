@@ -1,2 +1,4 @@
 kit/**/*.dll filter=lfs diff=lfs merge=lfs -text
 kit/**/*.addon64 filter=lfs diff=lfs merge=lfs -text
+kit/**/*.addon32 filter=lfs diff=lfs merge=lfs -text
+kit/**/*.exe filter=lfs diff=lfs merge=lfs -text

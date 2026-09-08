@@ -110,6 +110,11 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
 - **ReShade integration** - dxgi proxy for DirectX 11/12, global / per-user
   Vulkan layer, `DLSS5_Feed.fx` + `lumenite_Kernel.fx` motion-vector pipeline,
   `ReShade.ini` / `ReShadePreset.ini` wiring.
+- **32-bit game support** - 32-bit titles get DLSS 5 through a 64-bit **host
+  helper** (`host64\dlss5-feed-host64.exe` + its own ReShade) installed beside
+  the game, with the 32-bit feeder add-on (`dlss5-feed.addon32`) hooked into
+  the game's ReShade; the helper and game share memory across the bitness
+  boundary.
 - **Journaled installs** - every original file is backed up to
   `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
 - **Auto game discovery** - scan installed launchers (Steam, GOG, Epic, EA,
@@ -215,13 +220,17 @@ own full neural pass, so quality scales with `-Passes`.
 
 ## Notes & limitations
 
-- **64-bit only** - the ReShade hook, the DLSS5-Feeder addon, both neural
-  providers and NVIDIA's `nvngx_dlss*` runtimes are x86-64. A **32-bit** game
-  would need a 32-bit `dxgi.dll` proxy and 32-bit addons, which do not exist for
-  this stack, and NVIDIA ships the neural runtime as 64-bit only. The UI asks
-  for confirmation before installing into a 32-bit game; with "Install anyway"
-  (or `-Force`) the files are copied, but a 32-bit process cannot load them, so
-  the upscaler will not take effect.
+- **64-bit + 32-bit (host helper)** - the neural stack (`nvngx_dlss*`, both
+  providers and the feeder add-ons) is x86-64, so a 32-bit game cannot load it
+  directly. For **32-bit games** the installer puts a 64-bit **host helper**
+  (`host64\`) next to the game - `dlss5-feed-host64.exe`, its own ReShade hook
+  and the NVIDIA runtimes - while the game folder gets the 32-bit feeder
+  (`dlss5-feed.addon32`). The helper does the NGX work over shared memory, so a
+  32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
+  and the like. Caveats for 32-bit games: you must first install **32-bit
+  ReShade** with the ReShade installer (it detects 32-bit itself and enables
+  add-on loading), and **DirectX 9** games additionally need dgVoodoo2 (D3D9 ->
+  D3D11). The UI asks for confirmation before installing into a 32-bit game.
 - **DirectX 8/9** need dgVoodoo2 (D3D9 -> D3D11 translation) before the stack
   can hook them; the script warns but copies with `-Force`.
 - **OpenGL** needs a ReShade `opengl32.dll` proxy that is not bundled.

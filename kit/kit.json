@@ -1,87 +1,97 @@
 ﻿{
-    "reshade/dxgi.dll":  {
-                             "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
-                             "version":  "6.8.0",
-                             "size":  5592064
-                         },
-    "shaders/vort_Motion.fx":  {
-                                   "hash":  "71EF3086CCF86792F5A333346EEBB7B857434583712D3A51B9998DB99E562EDC",
-                                   "version":  "?",
-                                   "size":  2359
-                               },
-    "reshade-vulkan/ReShade32.dll":  {
-                                         "hash":  "DA430E0A9C6EECEFA0D1B27D05E16C426FB5D04E808B194D914EAAC4B31BC0F8",
-                                         "version":  "6.8.0",
-                                         "size":  4398080
-                                     },
-    "shaders/ReShade.fxh":  {
-                                "hash":  "6DABFBBAF968C3871905D2EA17F96572FF7B1CEC01310B5D0E5252B66B30174F",
-                                "version":  "?",
-                                "size":  4250
-                            },
-    "shaders/lumenite_Kernel.fx":  {
-                                       "hash":  "463D2BADA33FD3058383BC0273ABA74DF9D5F1DB75FE13D8F305A22BF94526E3",
-                                       "version":  "?",
-                                       "size":  35865
-                                   },
-    "shaders/DLSS5_Feed.fx":  {
-                                  "hash":  "955D911D3B567C57F4E0B44E528DAE3F3DF286FD8FD3E775B9F6B5DDD561AA94",
-                                  "version":  "?",
-                                  "size":  45032
-                              },
+    "addons/dlss5-feed.addon32":  {
+                                      "hash":  "DFB4A3BC491CB662353018CBEC9B0FE2D64C58B1CA8FF590ACABE509F00731A6",
+                                      "version":  "?",
+                                      "size":  169472
+                                  },
+    "addons/dlss5-feed.addon64":  {
+                                      "hash":  "E5A90BEBDEE0CEE92AE59648A2BF2FEF68410562AA2BD2A6BDB0B116AEBE48F5",
+                                      "version":  "?",
+                                      "size":  271872
+                                  },
     "chicken/deep-fried-chicken.addon64":  {
                                                "hash":  "106143DE0D74853B966A7141C19C2BB0FB46E7CE32C7F67D830D2DC5CDDF80EC",
-                                               "version":  "1.4.8.0-alpha",
+                                               "version":  "?",
                                                "size":  641024
                                            },
-    "runtime/nvngx_dlss.dll":  {
-                                   "hash":  "C85F971CE023C9F3492FC7455F0B01A24BA18EA39636407A846902C4360B0B7E",
-                                   "version":  "310,8,0,0",
-                                   "size":  58956400
-                               },
-    "runtime/nvngx_dlssnr.dll":  {
-                                     "hash":  "8270B350CD82DE5CE89806872CDD6B6A9249B80836B91BBEB3573470744CC206",
-                                     "version":  "310,8,0,0",
-                                     "size":  165840496
-                                 },
-    "plugins/deep-fried-chicken-nvngx.dll":  {
-                                                 "hash":  "E218CE8C20858D58E53A85B2AFC2C1E6F55768A96659E819FF40D71E872393A3",
-                                                 "version":  "?",
-                                                 "size":  3072
-                                             },
-    "shaders/ReShadeUI.fxh":  {
-                                  "hash":  "78ADF672DF47460297EB9FE6DD238D2AAFA24510B52B84FEB1A745DFF70EB901",
-                                  "version":  "?",
-                                  "size":  9930
-                              },
-    "reshade-vulkan/ReShade64.dll":  {
-                                         "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
-                                         "version":  "6.8.0",
-                                         "size":  5592064
-                                     },
-    "addons/dlss5-feed.addon64":  {
-                                      "hash":  "066EEC8C797DF2D656F2AB2324278921B1DD6E9116C9945294F4A00F7FEC608A",
-                                      "version":  "0.12.0.0",
-                                      "size":  224256
-                                  },
-    "reshade-vulkan/ReShade32.json":  {
-                                          "hash":  "DBFDBADB8C64B398B2F8BF30469841AB8C35E10C9DA40BA69B966559D5FA15F6",
-                                          "version":  "?",
-                                          "size":  526
-                                      },
     "chicken/deep-fried-chicken-nvngx.dll":  {
                                                  "hash":  "E218CE8C20858D58E53A85B2AFC2C1E6F55768A96659E819FF40D71E872393A3",
                                                  "version":  "?",
                                                  "size":  3072
                                              },
+    "host64/dlss5-feed-host64.exe":  {
+                                         "hash":  "D37CD3015458EFD5C1FEB2DA6AFA4215B45484940AD419A51803F130E18BA66F",
+                                         "version":  "?",
+                                         "size":  131072
+                                     },
+    "plugins/deep-fried-chicken-nvngx.dll":  {
+                                                 "hash":  "E218CE8C20858D58E53A85B2AFC2C1E6F55768A96659E819FF40D71E872393A3",
+                                                 "version":  "?",
+                                                 "size":  3072
+                                             },
+    "renodx/renodx-dlss5.addon64":  {
+                                        "hash":  "D5ADF82EB44B065F4C590AC91FE824BAB07AFEA0EB9F994BDE936710C8593952",
+                                        "version":  "?",
+                                        "size":  1732608
+                                    },
+    "reshade/dxgi.dll":  {
+                             "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
+                             "version":  "?",
+                             "size":  5592064
+                         },
+    "reshade-vulkan/ReShade32.dll":  {
+                                         "hash":  "DA430E0A9C6EECEFA0D1B27D05E16C426FB5D04E808B194D914EAAC4B31BC0F8",
+                                         "version":  "?",
+                                         "size":  4398080
+                                     },
+    "reshade-vulkan/ReShade32.json":  {
+                                          "hash":  "DBFDBADB8C64B398B2F8BF30469841AB8C35E10C9DA40BA69B966559D5FA15F6",
+                                          "version":  "?",
+                                          "size":  526
+                                      },
+    "reshade-vulkan/ReShade64.dll":  {
+                                         "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
+                                         "version":  "?",
+                                         "size":  5592064
+                                     },
     "reshade-vulkan/ReShade64.json":  {
                                           "hash":  "AA21713718843E531DA396E2BFC80772C9CB3C369D6C30B836BE6B0AE812D503",
                                           "version":  "?",
                                           "size":  526
                                       },
-    "renodx/renodx-dlss5.addon64":  {
-                                        "hash":  "D5ADF82EB44B065F4C590AC91FE824BAB07AFEA0EB9F994BDE936710C8593952",
-                                        "version":  "0.2026.0828.0517",
-                                        "size":  1732608
-                                    }
+    "runtime/nvngx_dlss.dll":  {
+                                   "hash":  "C85F971CE023C9F3492FC7455F0B01A24BA18EA39636407A846902C4360B0B7E",
+                                   "version":  "?",
+                                   "size":  58956400
+                               },
+    "runtime/nvngx_dlssnr.dll":  {
+                                     "hash":  "8270B350CD82DE5CE89806872CDD6B6A9249B80836B91BBEB3573470744CC206",
+                                     "version":  "?",
+                                     "size":  165840496
+                                 },
+    "shaders/DLSS5_Feed.fx":  {
+                                  "hash":  "CDAC08A721B14B97187DD86C5B5BEAD157C9063D7EE859A0F131A8EE791695F1",
+                                  "version":  "?",
+                                  "size":  51193
+                              },
+    "shaders/lumenite_Kernel.fx":  {
+                                       "hash":  "463D2BADA33FD3058383BC0273ABA74DF9D5F1DB75FE13D8F305A22BF94526E3",
+                                       "version":  "?",
+                                       "size":  35865
+                                   },
+    "shaders/ReShade.fxh":  {
+                                "hash":  "6DABFBBAF968C3871905D2EA17F96572FF7B1CEC01310B5D0E5252B66B30174F",
+                                "version":  "?",
+                                "size":  4250
+                            },
+    "shaders/ReShadeUI.fxh":  {
+                                  "hash":  "78ADF672DF47460297EB9FE6DD238D2AAFA24510B52B84FEB1A745DFF70EB901",
+                                  "version":  "?",
+                                  "size":  9930
+                              },
+    "shaders/vort_Motion.fx":  {
+                                   "hash":  "71EF3086CCF86792F5A333346EEBB7B857434583712D3A51B9998DB99E562EDC",
+                                   "version":  "?",
+                                   "size":  2359
+                               }
 }

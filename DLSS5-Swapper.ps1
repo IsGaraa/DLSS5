@@ -469,12 +469,16 @@ function New-Kit {
         if (-not (Test-Path -LiteralPath $require[$k])) { Fail "Missing source for '$k': $($require[$k]). Put the paths into sources.json or place the file at the known location." }
     }
 
-    $dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','shaders')
+$dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','host64','shaders')
     foreach ($d in $dirs) { New-Item -ItemType Directory -Path (Join-Path $Script:Kit $d) -Force | Out-Null }
 
     $manifest = [ordered]@{}
     $copy = @{}
     $copy['addons\dlss5-feed.addon64'] = $require.feed
+    foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe')) {
+        $src32 = Join-Path $src.rpcs3 $n
+        if (Test-Path -LiteralPath $src32) { $copy[$n] = $src32 }
+    }
     $copy['chicken\deep-fried-chicken.addon64'] = $require.chicken
     $copy['chicken\deep-fried-chicken-nvngx.dll'] = (Join-Path $src.chicken 'deep-fried-chicken-nvngx.dll')
     $copy['renodx\renodx-dlss5.addon64'] = $require.renodx
@@ -731,10 +735,20 @@ function Install-Stack {
         Write-Warn "OpenGL needs an opengl32.dll ReShade proxy; none is bundled."
         if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
     }
-if ($exe.Bitness -ne 64) {
-        Write-Warn "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit) - the 64-bit hook will not load in a $($exe.Bitness)-bit process."
-        if (-not $Force) {
-            Fail "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit)."
+# 32-bit games run the neural stack in a 64-bit host helper (feeder host64)
+    $is32Bit = ($exe.Bitness -ne 64)
+    $host64 = $false
+    if ($is32Bit) {
+        $has32 = (Test-Path -LiteralPath (Join-Path $Script:Kit 'addons\dlss5-feed.addon32')) -and
+                 (Test-Path -LiteralPath (Join-Path $Script:Kit 'host64\dlss5-feed-host64.exe'))
+        if ($has32) {
+            Write-Step "32-bit game: neural stack runs in the 64-bit host helper (host64\)"
+            $host64 = $true
+        } else {
+            Write-Warn "32-bit game ($($exe.Name)) but the 32-bit kit pieces are missing (addons\dlss5-feed.addon32, host64\dlss5-feed-host64.exe). Rebuild the kit."
+            if (-not $Force) {
+                Fail "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit)."
+            }
         }
     }
 
@@ -771,10 +785,12 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         date = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
         game = $GameDir
         exe  = $exe.Name
+        bit  = $exe.Bitness
         api  = $api
         apiLabel = $label
         provider = $Provider
         feeder = [bool]$useFeeder
+        host64 = [bool]$host64
         added = (New-Object System.Collections.ArrayList)
         replaced = (New-Object System.Collections.ArrayList)
     }
@@ -801,23 +817,24 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         [void]$manifest.added.Add($dest.Substring($GameDir.Length).TrimStart('\'))
     }
 
-    # ReShade injection (recorded so -Uninstall reverts it)
+# ReShade injection (recorded so -Uninstall reverts it)
     $reshade = Get-ReShadeInfo $exeDir
     $reshadeRoute = $reshade.Installed -or ($api -eq 'vulkan')
     if ($api -eq 'vulkan') {
-        $layer = Test-Path -LiteralPath 'C:\ProgramData\ReShade\ReShade64.dll'
+        $vkHub = if ($is32Bit) { 'ReShade32' } else { 'ReShade64' }
+        $layer = Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' ($vkHub + '.dll'))
         if (-not $layer) {
             $user = Join-Path $env:USERPROFILE '.dlss5vulkanlayer'
-            if (-not (Test-Path -LiteralPath (Join-Path $user 'ReShade64.dll'))) {
-                if ($DryRun) { Write-Step "[dry] would install user Vulkan layer" }
+            if (-not (Test-Path -LiteralPath (Join-Path $user ($vkHub + '.dll')))) {
+                if ($DryRun) { Write-Step "[dry] would install user Vulkan layer ($vkHub)" }
                 else {
                     New-Item -ItemType Directory -Path $user -Force | Out-Null
-                    if (Test-Path -LiteralPath (Join-Path $Script:Kit 'reshade-vulkan\ReShade64.dll')) {
-                        foreach ($n in @('ReShade64.dll','ReShade64.json')) {
+                    if (Test-Path -LiteralPath (Join-Path $Script:Kit "reshade-vulkan\$vkHub.dll")) {
+                        foreach ($n in @($vkHub + '.dll', $vkHub + '.json')) {
                             Copy-Item -LiteralPath (Join-Path $Script:Kit "reshade-vulkan\$n") -Destination (Join-Path $user $n) -Force
                         }
                         New-Item -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Force | Out-Null
-                        New-ItemProperty -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Name (Join-Path $user 'ReShade64.json') -Value 0 -PropertyType DWord -Force | Out-Null
+                        New-ItemProperty -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Name (Join-Path $user ($vkHub + '.json')) -Value 0 -PropertyType DWord -Force | Out-Null
                     }
                 }
                 $reshadeRoute = $true
@@ -827,9 +844,15 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     if ($api -eq 'dxgi') {
         $needsProxy = -not $reshade.Installed
         if ($needsProxy -and -not (Test-Path -LiteralPath (Join-Path $exeDir 'dxgi.dll'))) {
-            if ($DryRun) { Write-Step "[dry] would copy ReShade dxgi.dll" }
-            else { Install-OneFile 'reshade\dxgi.dll' 'dxgi.dll' }
-            $reshadeRoute = $true
+            if ($is32Bit) {
+                Write-Warn "32-bit D3D game: a 32-bit ReShade dxgi hook must be installed first (run the ReShade installer against $($exe.Name) - it detects 32-bit itself and enables add-on loading)."
+                if ($Force) { $reshadeRoute = $true }
+                else { Fail "No 32-bit ReShade dxgi hook present. Install ReShade 32-bit into the game folder, then retry (or use -Force to copy the files anyway)." }
+            } else {
+                if ($DryRun) { Write-Step "[dry] would copy ReShade dxgi.dll" }
+                else { Install-OneFile 'reshade\dxgi.dll' 'dxgi.dll' }
+                $reshadeRoute = $true
+            }
         } elseif (-not $needsProxy) {
             Write-Step "ReShade already present: $($reshade.File) v$($reshade.Version)"
         }
@@ -838,33 +861,43 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     if (-not $reshadeRoute -and -not $DryRun) { Fail "No ReShade injection route available. Install ReShade manually, then retry." }
 
     if ($DryRun) {
-        Write-Step "[dry] provider=$Provider passes=$Passes work=$WorkPercent% style=$StyleIndex mvProvider=$MVProvider feeder=$useFeeder route=$reshadeRoute"
+        Write-Step "[dry] provider=$Provider passes=$Passes work=$WorkPercent% style=$StyleIndex mvProvider=$MVProvider feeder=$useFeeder route=$reshadeRoute host64=$host64"
         return
     }
 
-    # runtimes
-    Install-OneFile 'runtime\nvngx_dlss.dll'    'nvngx_dlss.dll'
-    Install-OneFile 'runtime\nvngx_dlssnr.dll'  'nvngx_dlssnr.dll'
+# runtimes + 32-bit host helper + feeder + neural consumer
+    $hostRel = if ($host64) { 'host64\' } else { '' }
+    $earlyLoadAddon = $null
+    $hostLoadAddon = $null
+
+    if ($host64) {
+        Install-OneFile 'host64\dlss5-feed-host64.exe' 'host64\dlss5-feed-host64.exe'
+        Install-OneFile 'reshade\dxgi.dll'             'host64\dxgi.dll'
+    }
+    Install-OneFile 'runtime\nvngx_dlss.dll'   ($hostRel + 'nvngx_dlss.dll')
+    Install-OneFile 'runtime\nvngx_dlssnr.dll' ($hostRel + 'nvngx_dlssnr.dll')
 
     if ($useFeeder) {
-        Install-OneFile 'addons\dlss5-feed.addon64' 'dlss5-feed.addon64'
+        if ($host64) { Install-OneFile 'addons\dlss5-feed.addon32' 'dlss5-feed.addon32' }
+        else { Install-OneFile 'addons\dlss5-feed.addon64' 'dlss5-feed.addon64' }
     }
 
-    $earlyLoadAddon = $null
     if ($Provider -eq 'chicken') {
-        Install-OneFile 'chicken\deep-fried-chicken.addon64'    'deep-fried-chicken.addon64'
-        Install-OneFile 'chicken\deep-fried-chicken-nvngx.dll'  'deep-fried-chicken-nvngx.dll'
-        $earlyLoadAddon = 'deep-fried-chicken.addon64'
-        # generate chicken cfg
-        $cfgDest = Join-Path $exeDir 'deep-fried-chicken.cfg'
+        Install-OneFile 'chicken\deep-fried-chicken.addon64'   ($hostRel + 'deep-fried-chicken.addon64')
+        Install-OneFile 'chicken\deep-fried-chicken-nvngx.dll' ($hostRel + 'deep-fried-chicken-nvngx.dll')
+        $hostLoadAddon = 'deep-fried-chicken.addon64'
+        # generate chicken cfg (next to the consumer: game dir for 64-bit, host64\ for 32-bit)
+        $cfgDest = Join-Path $exeDir ($hostRel + 'deep-fried-chicken.cfg')
+        New-Item -ItemType Directory -Path (Split-Path -Parent $cfgDest) -Force | Out-Null
         Add-Replace $cfgDest
         $cfgText = Get-DfcConfig -Layers $Passes -WorkPercent $WorkPercent -StyleIndex $StyleIndex -NrxPreset $NrxPreset -NrxIntensity $NrxIntensity -CleanFry $SymCleanFry -TextureBoost $SymTexBoost
         [System.IO.File]::WriteAllText($cfgDest, $cfgText, (New-Object System.Text.UTF8Encoding($false)))
         [void]$manifest.added.Add($cfgDest.Substring($GameDir.Length).TrimStart('\'))
     } else {
-        Install-OneFile 'renodx\renodx-dlss5.addon64' 'renodx-dlss5.addon64'
-        $earlyLoadAddon = 'renodx-dlss5.addon64'
+        Install-OneFile 'renodx\renodx-dlss5.addon64' ($hostRel + 'renodx-dlss5.addon64')
+        $hostLoadAddon = 'renodx-dlss5.addon64'
     }
+    if (-not $host64) { $earlyLoadAddon = $hostLoadAddon }
 
     if ($useFeeder) {
         $feedDest = Join-Path $exeDir 'dlss5-feed.cfg'
@@ -886,7 +919,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         [void]$manifest.added.Add($dest.Substring($GameDir.Length).TrimStart('\'))
     }
 
-    # ReShade.ini
+# ReShade.ini (game side)
     $iniPath = Join-Path $exeDir 'ReShade.ini'
     Add-Replace $iniPath
     $sections = @{
@@ -898,8 +931,8 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         }
     }
     if ($earlyLoadAddon) { $sections['ADDON']['LoadFromDllMain'] = $earlyLoadAddon }
-    if ($Provider -eq 'renodx') {
-        $styleNum = switch ($StyleIndex) { 1 { 1 } 2 { 2 } default { 0 } }
+    $styleNum = switch ($StyleIndex) { 1 { 1 } 2 { 2 } default { 0 } }
+    if ($Provider -eq 'renodx' -and -not $host64) {
         $sections['RenoDX.DLSS5'] = @{
             'EnableHooks'        = '2'
             'NeuralUplift'       = ([int]$SymUplift.IsPresent)
@@ -916,6 +949,31 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
     Set-IniValues -Path $iniPath -Sections $sections
     [void]$manifest.added.Add($iniPath.Substring($GameDir.Length).TrimStart('\'))
+
+    # host64\ReShade.ini - the 64-bit helper's own ReShade hosts the neural consumer
+    if ($host64) {
+        $hostIni = Join-Path $exeDir 'host64\ReShade.ini'
+        Add-Replace $hostIni
+        $hsections = @{ 'ADDON' = @{ 'AddonPath' = '.\' } }
+        if ($hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
+        if ($Provider -eq 'renodx') {
+            $hsections['RenoDX.DLSS5'] = @{
+                'EnableHooks'        = '2'
+                'NeuralUplift'       = ([int]$SymUplift.IsPresent)
+                'NRAutoMask'         = '0'
+                'NRDiffuseWhiteNits' = '203'
+                'NREnableUpscaling'  = '1'
+                'NRIntensity'        = ('{0:0}' -f $NrxIntensity)
+                'NRMVecScaleX'       = '1'
+                'NRMVecScaleY'       = '1'
+                'NRPreset'           = "$NrxPreset"
+                'NRStyle'            = "$styleNum"
+                'NRUICorrection'     = '1'
+            }
+        }
+        Set-IniValues -Path $hostIni -Sections $hsections
+        [void]$manifest.added.Add($hostIni.Substring($GameDir.Length).TrimStart('\'))
+    }
 
     # preset
     $presetPath = Join-Path $exeDir 'ReShadePreset.ini'
@@ -955,6 +1013,9 @@ if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPa
         Write-Step "Provider : $Provider"
         if ($Provider -eq 'chicken') { Write-Step "Passes   : $Passes (deep-fried-chicken.cfg layers)" }
         Write-Step "Feeder   : $([bool]$useFeeder)"
+        $archNote = ''
+        if ($host64) { $archNote = '  (neural stack in host64\)' }
+        Write-Step ("Arch     : {0}-bit{1}" -f $exe.Bitness, $archNote)
         Write-Step "Logs     : $exeDir\dlss5-feed.log"
         Write-Step "Verify   : .\DLSS5-Swapper.ps1 -Verify -GamePath `"$GameDir`""
     }
@@ -969,6 +1030,8 @@ if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPa
         provider = $Provider
         passes = $Passes
         feeder = [bool]$useFeeder
+        bitness = $exe.Bitness
+        host64 = [bool]$host64
         added = @($manifest.added)
         dryRun = [bool]$DryRun
         manifestPath = (Get-ManifestPath $GameDir)
@@ -984,18 +1047,25 @@ function Invoke-VerifyStack {
     $exe = $scan.Chosen
     if (-not $exe) { Fail "No game executable found." }
     $exeDir = Split-Path -Parent $exe.Path
-    $manifest = Get-OldManifest $GameDir
+$manifest = Get-OldManifest $GameDir
     Write-Step "Verifying $($exe.Name) ($($exe.Label))"
 
+    $pfx = if ($exe.Bitness -ne 64) { 'host64\' } else { '' }
     $checks = @()
     foreach ($n in @('nvngx_dlss.dll','nvngx_dlssnr.dll')) {
-        $p = Join-Path $exeDir $n
-        $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'v' + (Get-FileProductVersion $p) } else { 'MISSING' } }
+        $p = Join-Path $exeDir ($pfx + $n)
+        $checks += [pscustomobject]@{ Item = ($pfx + $n); Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'v' + (Get-FileProductVersion $p) } else { 'MISSING' } }
+    }
+    if ($exe.Bitness -ne 64) {
+        foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe','host64\dxgi.dll')) {
+            $p = Join-Path $exeDir $n
+            $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
+        }
     }
     foreach ($n in @('dlss5-feed.addon64','deep-fried-chicken.addon64','deep-fried-chicken-nvngx.dll','deep-fried-chicken.cfg','renodx-dlss5.addon64','dxgi.dll')) {
-        $p = Join-Path $exeDir $n
+        $p = Join-Path $exeDir ($pfx + $n)
         if (Test-Path -LiteralPath $p) {
-            $checks += [pscustomobject]@{ Item = $n; Ok = $true; Note = 'present' }
+            $checks += [pscustomobject]@{ Item = ($pfx + $n); Ok = $true; Note = 'present' }
         }
     }
     $feedCfg = Join-Path $exeDir 'dlss5-feed.cfg'
@@ -1003,15 +1073,24 @@ function Invoke-VerifyStack {
         $text = Get-Content -LiteralPath $feedCfg -Raw
         $checks += [pscustomobject]@{ Item = 'dlss5-feed.cfg mode/warmup'; Ok = ($text -match 'mode=2'); Note = ($text -match 'warmup_rebuild=\d+') }
     }
-    $dfcCfg = Join-Path $exeDir 'deep-fried-chicken.cfg'
+    $dfcCfg = Join-Path $exeDir ($pfx + 'deep-fried-chicken.cfg')
     if (Test-Path -LiteralPath $dfcCfg) {
         $text = Get-Content -LiteralPath $dfcCfg -Raw
         $layers = if ($text -match 'layers=(\d+)') { $matches[1] } else { '?' }
-        $checks += [pscustomobject]@{ Item = 'deep-fried-chicken.cfg'; Ok = ($text -match 'arm=1'); Note = "layers=$layers" }
+        $checks += [pscustomobject]@{ Item = ($pfx + 'deep-fried-chicken.cfg'); Ok = ($text -match 'arm=1'); Note = "layers=$layers" }
     }
     if (Test-Path -LiteralPath (Join-Path $exeDir 'ReShade.ini')) {
         $ini = Get-Content -LiteralPath (Join-Path $exeDir 'ReShade.ini') -Raw
-        $checks += [pscustomobject]@{ Item = 'ReShade.ini LoadFromDllMain'; Ok = ($ini -match 'LoadFromDllMain=.+addon64'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
+        if ($exe.Bitness -eq 64) {
+            $checks += [pscustomobject]@{ Item = 'ReShade.ini LoadFromDllMain'; Ok = ($ini -match 'LoadFromDllMain=.+addon64'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
+        } else {
+            $checks += [pscustomobject]@{ Item = 'ReShade.ini AddonPath'; Ok = ($ini -match 'AddonPath=.\\\s*$' -or $ini -match 'AddonPath'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
+            $hostIniP = Join-Path $exeDir 'host64\ReShade.ini'
+            if (Test-Path -LiteralPath $hostIniP) {
+                $hini = Get-Content -LiteralPath $hostIniP -Raw
+                $checks += [pscustomobject]@{ Item = 'host64\ReShade.ini LoadFromDllMain'; Ok = ($hini -match 'LoadFromDllMain=.+addon64'); Note = ($hini -match 'AddonPath') }
+            }
+        }
     }
 
 if (-not $Json) {
@@ -1022,10 +1101,14 @@ if (-not $Json) {
     }
 
     # conflict detection
-    $activeAddons = Get-ChildItem -LiteralPath $exeDir -Filter '*.addon64' -File -ErrorAction SilentlyContinue
+    $activeAddons = @(Get-ChildItem -LiteralPath $exeDir -Filter '*.addon64' -File -ErrorAction SilentlyContinue)
+    $host64Dir = Join-Path $exeDir 'host64'
+    if (Test-Path -LiteralPath $host64Dir) {
+        $activeAddons += @(Get-ChildItem -LiteralPath $host64Dir -Filter '*.addon64' -File -ErrorAction SilentlyContinue)
+    }
     $neural = @($activeAddons | Where-Object { $_.Name -match 'chicken|renodx' })
     if ($neural.Count -gt 1) { Write-Err "!! Multiple neural providers active: $($neural.Name -join ', ') - only one may be present. Chicken stays inert beside RenoDX." }
-    elseif ($neural.Count -eq 1) { Write-Ok "Neural provider: $($neural[0].Name)" }
+    elseif ($neural.Count -eq 1) { Write-Ok "Neural provider: $($neural[0].FullName.Substring($GameDir.Length))" }
 
     if (-not $Json) {
         foreach ($logName in @('dlss5-feed.log','deep-fried-chicken.log')) {
@@ -1037,7 +1120,7 @@ if (-not $Json) {
         }
     }
 if ($manifest) {
-        Write-Step "Manifest: provider=$($manifest.provider) api=$($manifest.api) feeder=$($manifest.feeder) files=$($manifest.added.Count)"
+        Write-Step "Manifest: provider=$($manifest.provider) api=$($manifest.api) bit=$($manifest.bit) host64=$($manifest.host64) feeder=$($manifest.feeder) files=$($manifest.added.Count)"
     }
 
     return [pscustomobject]@{
@@ -1071,8 +1154,12 @@ function Invoke-UninstallStack {
         if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $dst -Force }
     }
 Remove-Item -LiteralPath $backDir -Recurse -Force
+    if ($manifest.host64) {
+        $host64Dir = Join-Path $GameDir 'host64'
+        if (Test-Path -LiteralPath $host64Dir) { Remove-Item -LiteralPath $host64Dir -Recurse -Force }
+    }
     Write-Ok "Uninstalled. Original files restored."
-    return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($manifest.added); restored = @($manifest.replaced) }
+    return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($manifest.added); restored = @($manifest.replaced); host64 = [bool]$manifest.host64 }
 }
 
 # ---------------------------------------------------------------------------

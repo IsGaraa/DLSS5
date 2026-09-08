@@ -443,9 +443,9 @@ function doInstall() {
   const bit = opt0 && opt0.dataset ? Number(opt0.dataset.bit || 0) : Number(g.bit || 0);
   const exeName = (opt0 && opt0.value) || g.name;
   if (bit === 32) {
-    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. The DLSS 5 stack, its ReShade dxgi hook and the neural add-ons are <b>64-bit only</b> \u2014 the files will be copied into the game folder, but a 32-bit process will not load a 64-bit hook, so it will likely have no effect in-game.<br><br>Continue anyway?</div>', [
+    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. DLSS 5\u2019s neural stack will run inside a 64-bit <b>host helper</b> (<code>host64\\</code>) that the swapper installs next to the game, and the feeder hooks the 32-bit process itself.<br><br>Notes: 32-bit Direct3D games still need a 32-bit ReShade installed against this exe (the ReShade installer detects 32-bit itself), and DirectX 9 games need dgVoodoo2. Continue?</div>', [
       { label: 'Decline', cls: 'ghost', action: closeModal },
-      { label: 'Install anyway', cls: 'danger', action: () => { closeModal(); runInstall(g, true); } }
+      { label: 'Install (host helper)', cls: 'danger', action: () => { closeModal(); runInstall(g, true); } }
     ]);
     return;
   }
