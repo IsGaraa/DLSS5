@@ -215,9 +215,13 @@ own full neural pass, so quality scales with `-Passes`.
 
 ## Notes & limitations
 
-- **64-bit only** - the addons and the neural runtime are x86-64. Installing a
-  32-bit game shows a warning; files are copied anyway with `-Force` (the UI's
-  "Install anyway"), but the 64-bit hook will not load in a 32-bit process.
+- **64-bit only** - the ReShade hook, the DLSS5-Feeder addon, both neural
+  providers and NVIDIA's `nvngx_dlss*` runtimes are x86-64. A **32-bit** game
+  would need a 32-bit `dxgi.dll` proxy and 32-bit addons, which do not exist for
+  this stack, and NVIDIA ships the neural runtime as 64-bit only. The UI asks
+  for confirmation before installing into a 32-bit game; with "Install anyway"
+  (or `-Force`) the files are copied, but a 32-bit process cannot load them, so
+  the upscaler will not take effect.
 - **DirectX 8/9** need dgVoodoo2 (D3D9 -> D3D11 translation) before the stack
   can hook them; the script warns but copies with `-Force`.
 - **OpenGL** needs a ReShade `opengl32.dll` proxy that is not bundled.
