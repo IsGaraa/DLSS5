@@ -5,6 +5,9 @@ _DLSS5_Backup/
 *_Backup/
 backup/
 
+# dgVoodoo2 is built into kit locally on purpose (AV flags its DLLs on download)
+kit/dgvoodoo/
+
 # electron app
 node_modules/
 DLSS5-UI/library.json

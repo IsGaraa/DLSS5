@@ -19,26 +19,6 @@
                                                  "version":  "",
                                                  "size":  3072
                                              },
-    "dgvoodoo/D3D8.dll":  {
-                              "hash":  "D6E8931E785E267F926C049D4D1257B00771E2DE8C57C8F39E434DDF6185DF06",
-                              "version":  "4.8.2.134",
-                              "size":  413696
-                          },
-    "dgvoodoo/D3D9.dll":  {
-                              "hash":  "DB1C445F7BCF699DF1E175E974C779BDC7E19A468680A44884B1AB7078888D04",
-                              "version":  "4.9.0.904",
-                              "size":  482304
-                          },
-    "dgvoodoo/dgVoodoo.conf":  {
-                                   "hash":  "3C7DA2FAC3EAAD369DF468E80C9BA9C4DB632C419799B32BBC31279D10985801",
-                                   "version":  "",
-                                   "size":  21908
-                               },
-    "dgvoodoo/dgVoodooCpl.exe":  {
-                                     "hash":  "F916497C2DC4378353108C6588082F042795B62854CD3E54051C7BCBA4B53D1F",
-                                     "version":  "2.8.7.4",
-                                     "size":  450560
-                                 },
     "host64/dlss5-feed-host64.exe":  {
                                          "hash":  "D37CD3015458EFD5C1FEB2DA6AFA4215B45484940AD419A51803F130E18BA66F",
                                          "version":  "",

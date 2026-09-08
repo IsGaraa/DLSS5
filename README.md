@@ -114,7 +114,8 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
   helper** (`host64\dlss5-feed-host64.exe` + its own ReShade) installed beside
   the game, with the 32-bit feeder add-on (`dlss5-feed.addon32`) hooked into
   the game's ReShade; the helper and game share memory across the bitness
-  boundary.
+  boundary. **DirectX 8/9** 32-bit titles are D3D-translated with **dgVoodoo2**
+  (built locally - see Notes *dgVoodoo2* below).
 - **Journaled installs** - every original file is backed up to
   `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
 - **Auto game discovery** - scan installed launchers (Steam, GOG, Epic, EA,
@@ -229,10 +230,20 @@ own full neural pass, so quality scales with `-Passes`.
 32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
    and the like. Caveats for 32-bit games: you must first install **32-bit
    ReShade** with the ReShade installer (it detects 32-bit itself and enables
-   add-on loading), and **DirectX 8/9** games are wrapped automatically with
-   **dgVoodoo2** (D3D8/9 -> D3D11) - the script deploys `D3D8.dll` / `D3D9.dll`,
-   `dgVoodoo.conf` and `dgVoodooCpl.exe` next to the exe. The UI asks for
+   add-on loading; older tool versions asked for this - a bundled 32-bit
+   ReShade hook is planned), and **DirectX 8/9** games are wrapped
+   automatically with **dgVoodoo2** (D3D8/9 -> D3D11). The UI asks for
    confirmation before installing into a 32-bit game.
+- **dgVoodoo2** - DirectX 8/9 translation for 32-bit games is **not bundled
+  with the repo**: antivirus products flag dgVoodoo's DLLs on download (known
+  false positives, 29/66 on VirusTotal), so nothing in this repository ever
+  triggers that on a fresh clone. Instead the installer builds it from a local
+  folder: grab the official release
+  (<https://github.com/dege-diosg/dgVoodoo2/releases> - a 32-bit `D3D8.dll` /
+  `D3D9.dll`, `dgVoodoo.conf` and `dgVoodooCpl.exe` from the zip), set
+  `"dgvoodoo": "C:\\path\\to\\extracted"` in `sources.json`, run `-BuildKit`,
+  and the 32-bit D3D8/9 path auto-deploys those files next to the game's exe.
+  Without them the installer warns and copies only with `-Force`.
 - **DirectX 8/9 (64-bit)** need a manual dgVoodoo2 setup (D3D9 -> D3D11
   translation) before the stack can hook them; the script warns but copies
   with `-Force`.
@@ -259,7 +270,8 @@ DLSS5-UI/            # Electron desktop app
   start.bat          #   one-click launcher (no console window)
   library.json       #   saved game folders (gitignored)
   library-cache.json #   last scan, loads instantly at startup (gitignored)
-kit/                 # harvested binary kit (built by -BuildKit, tracked via Git LFS)
+kit/                 # harvested binary kit (built by -BuildKit, tracked via Git LFS;
+                     #   local-only extras like dgvoodoo/ are gitignored - see Notes)
 ```
 
 ## Credits
