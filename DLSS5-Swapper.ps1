@@ -12,7 +12,7 @@
   Rendering API is auto-detected from the game executable PE (imports, delayed
   imports, binary markers, sibling modules and filename), including DXVK/vkd3d
   wrappers: DirectX 11/12 (dxgi hook), Vulkan (global/user Vulkan layer),
-  DirectX 8/9 (dgVoodoo translation required), OpenGL.
+  DirectX 8/9 (dgVoodoo2 auto-deployed for 32-bit games), OpenGL.
 
   USAGE
     .\DLSS5-Swapper.ps1 -BuildKit                     build the file kit from
@@ -101,6 +101,7 @@ $Script:SourceDefaults = @{
     rpcs3     = 'C:\Users\drago\Downloads\Compressed\rpcs3-v0.0.42-19930-33a723af_win64_msvc'
     gta       = 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced'
     reshadeVk = 'C:\ProgramData\ReShade'
+    dgvoodoo  = 'C:\Users\drago\Downloads\Compressed\dgVoodoo2-2.87.4'
 }
 
 $Script:NOT_A_GAME = '^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|unitycrashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|rapidcrc|autorun|autoplay|quicksfv|readme|config|benchmark|report|helper|service|cleanup|modorganizer|redlauncher|skse\d*_loader|hlds\b|srcds\b|steamerrorreporter|dgvoodoocpl|reshade_setup)'
@@ -469,7 +470,7 @@ function New-Kit {
         if (-not (Test-Path -LiteralPath $require[$k])) { Fail "Missing source for '$k': $($require[$k]). Put the paths into sources.json or place the file at the known location." }
     }
 
-$dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','host64','shaders')
+$dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','host64','shaders','dgvoodoo')
     foreach ($d in $dirs) { New-Item -ItemType Directory -Path (Join-Path $Script:Kit $d) -Force | Out-Null }
 
     $manifest = [ordered]@{}
@@ -478,6 +479,11 @@ $dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vul
     foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe')) {
         $src32 = Join-Path $src.rpcs3 $n
         if (Test-Path -LiteralPath $src32) { $copy[$n] = $src32 }
+        else {
+            $existing = Join-Path $Script:Kit $n
+            if (Test-Path -LiteralPath $existing) { $copy[$n] = $existing }
+            else { Write-Warn "no source for optional '$n' and no prior kit copy - skipped" }
+        }
     }
     $copy['chicken\deep-fried-chicken.addon64'] = $require.chicken
     $copy['chicken\deep-fried-chicken-nvngx.dll'] = (Join-Path $src.chicken 'deep-fried-chicken-nvngx.dll')
@@ -492,10 +498,22 @@ $dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vul
         $p = Join-Path $src.rpcs3 "reshade-shaders\Shaders\$n"
         if (Test-Path -LiteralPath $p) { $copy["shaders\$n"] = $p }
     }
-    if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
+if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
         foreach ($n in @('ReShade64.dll','ReShade64.json','ReShade32.dll','ReShade32.json')) {
             $p = Join-Path $src.reshadeVk $n
             if (Test-Path -LiteralPath $p) { $copy["reshade-vulkan\$n"] = $p }
+        }
+    }
+
+    $dv32 = Join-Path $src.dgvoodoo 'MS\x86\D3D9.dll'
+    if (Test-Path -LiteralPath $dv32) {
+        foreach ($n in @('D3D8.dll','D3D9.dll')) {
+            $p = Join-Path $src.dgvoodoo "MS\x86\$n"
+            if (Test-Path -LiteralPath $p) { $copy["dgvoodoo\$n"] = $p }
+        }
+        foreach ($n in @('dgVoodoo.conf','dgVoodooCpl.exe')) {
+            $p = Join-Path $src.dgvoodoo $n
+            if (Test-Path -LiteralPath $p) { $copy["dgvoodoo\$n"] = $p }
         }
     }
 
@@ -727,11 +745,7 @@ function Install-Stack {
     }
     Write-Step "Render API: $label"
 
-    if ($api -eq 'd3d8' -or $api -eq 'd3d9') {
-        Write-Warn "DirectX 8/9 needs dgVoodoo2 -> D3D11 translation before the DLSS5 stack can hook it."
-        if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
-    }
-    if ($api -eq 'opengl') {
+if ($api -eq 'opengl') {
         Write-Warn "OpenGL needs an opengl32.dll ReShade proxy; none is bundled."
         if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
     }
@@ -749,6 +763,16 @@ function Install-Stack {
             if (-not $Force) {
                 Fail "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit)."
             }
+        }
+    }
+
+    if ($api -eq 'd3d8' -or $api -eq 'd3d9') {
+        $hasDg = (Test-Path -LiteralPath (Join-Path $Script:Kit 'dgvoodoo\D3D9.dll'))
+        if ($is32Bit -and $hasDg) {
+            Write-Step "DirectX $($api.Substring(3)) game: dgVoodoo2 (D3D8/9 -> D3D11) will be deployed next to the exe so the stack can hook it."
+        } else {
+            Write-Warn "DirectX 8/9 needs dgVoodoo2 -> D3D11 translation before the DLSS5 stack can hook it."
+            if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
         }
     }
 
@@ -820,6 +844,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
 # ReShade injection (recorded so -Uninstall reverts it)
     $reshade = Get-ReShadeInfo $exeDir
     $reshadeRoute = $reshade.Installed -or ($api -eq 'vulkan')
+    if (($api -eq 'd3d8' -or $api -eq 'd3d9') -and $is32Bit -and $Force) { $reshadeRoute = $true }
     if ($api -eq 'vulkan') {
         $vkHub = if ($is32Bit) { 'ReShade32' } else { 'ReShade64' }
         $layer = Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' ($vkHub + '.dll'))
@@ -903,8 +928,15 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         $feedDest = Join-Path $exeDir 'dlss5-feed.cfg'
         Add-Replace $feedDest
         $warmup = if ($Provider -eq 'chicken') { 0 } else { 180 }
-        [System.IO.File]::WriteAllText($feedDest, (Get-FeedConfig -WorkPercent $WorkPercent -Warmup $warmup), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($feedDest, (Get-FeedConfig -WorkPercent $WorkPercent -Warmup $warmup), (New-Object System.Text.UTF8Encoding($false)))
         [void]$manifest.added.Add($feedDest.Substring($GameDir.Length).TrimStart('\'))
+    }
+
+    # dgVoodoo2 (DirectX 8/9 -> D3D11) for 32-bit D3D8/D3D9 games
+    if (($api -eq 'd3d8' -or $api -eq 'd3d9') -and $is32Bit) {
+        $dgFiles = @('D3D9.dll','dgVoodoo.conf','dgVoodooCpl.exe')
+        if ($api -eq 'd3d8') { $dgFiles = @('D3D8.dll','D3D9.dll','dgVoodoo.conf','dgVoodooCpl.exe') }
+        foreach ($n in $dgFiles) { Install-OneFile "dgvoodoo\$n" $n }
     }
 
     # shaders
@@ -1058,6 +1090,14 @@ $manifest = Get-OldManifest $GameDir
     }
     if ($exe.Bitness -ne 64) {
         foreach ($n in @('dlss5-feed.addon32','host64\dlss5-feed-host64.exe','host64\dxgi.dll')) {
+            $p = Join-Path $exeDir $n
+            $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
+        }
+    }
+    if ($manifest -and ($manifest.api -eq 'd3d8' -or $manifest.api -eq 'd3d9') -and $manifest.bit -ne 64) {
+        $dgChecks = @('D3D9.dll','dgVoodoo.conf')
+        if ($manifest.api -eq 'd3d8') { $dgChecks = @('D3D8.dll','D3D9.dll','dgVoodoo.conf') }
+        foreach ($n in $dgChecks) {
             $p = Join-Path $exeDir $n
             $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
         }

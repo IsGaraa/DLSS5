@@ -226,13 +226,16 @@ own full neural pass, so quality scales with `-Passes`.
   (`host64\`) next to the game - `dlss5-feed-host64.exe`, its own ReShade hook
   and the NVIDIA runtimes - while the game folder gets the 32-bit feeder
   (`dlss5-feed.addon32`). The helper does the NGX work over shared memory, so a
-  32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
-  and the like. Caveats for 32-bit games: you must first install **32-bit
-  ReShade** with the ReShade installer (it detects 32-bit itself and enables
-  add-on loading), and **DirectX 9** games additionally need dgVoodoo2 (D3D9 ->
-  D3D11). The UI asks for confirmation before installing into a 32-bit game.
-- **DirectX 8/9** need dgVoodoo2 (D3D9 -> D3D11 translation) before the stack
-  can hook them; the script warns but copies with `-Force`.
+32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
+   and the like. Caveats for 32-bit games: you must first install **32-bit
+   ReShade** with the ReShade installer (it detects 32-bit itself and enables
+   add-on loading), and **DirectX 8/9** games are wrapped automatically with
+   **dgVoodoo2** (D3D8/9 -> D3D11) - the script deploys `D3D8.dll` / `D3D9.dll`,
+   `dgVoodoo.conf` and `dgVoodooCpl.exe` next to the exe. The UI asks for
+   confirmation before installing into a 32-bit game.
+- **DirectX 8/9 (64-bit)** need a manual dgVoodoo2 setup (D3D9 -> D3D11
+  translation) before the stack can hook them; the script warns but copies
+  with `-Force`.
 - **OpenGL** needs a ReShade `opengl32.dll` proxy that is not bundled.
 - **Vulkan** picks the machine-wide ReShade layer
   (`C:\ProgramData\ReShade\`); if absent it falls back to a per-user implicit
