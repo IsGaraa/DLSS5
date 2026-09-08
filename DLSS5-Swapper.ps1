@@ -1183,6 +1183,20 @@ function Invoke-VerifyStack {
     $exeDir = Split-Path -Parent $exe.Path
 $manifest = Get-OldManifest $GameDir
     Write-Step "Verifying $($exe.Name) ($($exe.Label))"
+    if (-not $manifest) {
+        Write-Step "No DLSS5 install found in $($exe.Name) - nothing to verify."
+        if (-not $Json) { Write-Warn "Nothing was installed here yet. Run -Install first." }
+        return [pscustomobject]@{
+            action = 'verify'
+            gameDir = $GameDir
+            exe = $exe.Name
+            api = $exe.Label
+            checks = @()
+            provider = $null
+            installed = $false
+            note = 'not installed'
+        }
+    }
 
     $pfx = if ($exe.Bitness -ne 64) { 'host64\' } else { '' }
     $checks = @()

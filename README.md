@@ -35,10 +35,14 @@ git lfs pull        # the binary kit ships via Git LFS
 
 ### 2. Requirements
 
+Full requirements (hardware, NVIDIA driver versions, permissions, kit rebuild
+sources) live in [Requirements.md](Requirements.md). The short version:
+
 | Requirement | Why | Verdict |
 |---|---|---|
 | Windows 10+ x64 | 64-bit hooks and neural runtimes | required |
 | PowerShell 5.1+ | the backend is a single `.ps1` | required |
+| NVIDIA RTX 30/40/50 + recent driver | DLSS 5 Neural Rendering needs Tensor Cores; see Requirements.md | required |
 | Node.js 18+ | the Electron UI | only for the UI |
 | Git + Git LFS | cloning and updating the repo, pulling `kit/` | required |
 | The `kit/` folder | binary DLLs and addons (already in the repo) | ships with clone |
@@ -64,8 +68,9 @@ The Electron window opens directly (no console window stays open). From there:
 | **Add games** | *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep-scan a drive) |
 | **Rescan** | *Rescan all* re-scans every saved folder; the last scan is cached and loads instantly at startup |
 | **Install** | Pick a game, choose a provider and options, click *Install* |
-| **Verify** | Check what ended up in the folder vs. the manifest |
+| **Verify** | Check what ended up in the folder vs. the manifest (tells you plainly if nothing was installed yet) |
 | **Restore** | Roll back any install from the journaled backup |
+| **Info** | *Info* tab - app version, Electron/Chromium/Node, OS, repository link, Report-a-bug |
 
 ### 4. Or use the CLI - no UI needed
 
@@ -132,6 +137,11 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
   (built locally - see Notes *dgVoodoo2* below).
 - **Journaled installs** - every original file is backed up to
   `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
+  Switching providers also removes the disabled consumer's leftover add-on and
+  its `[RenoDX.DLSS5]` ini section, so a stale provider never keeps loading.
+- **Info tab** - shows the app version, runtime (Electron/Chromium/Node), OS
+  and the repository remote, with an *Open GitHub page* button and the
+  *Report a bug* form (pre-filled with OS, versions and the console log tail).
 - **Auto game discovery** - scan installed launchers (Steam, GOG, Epic, EA,
   Origin, Ubisoft) or deep-scan any drive/folder; results are saved so a
   rescan catches newly installed games.
@@ -167,7 +177,7 @@ UI and for scripting:
 |---|---|
 | `-Scan` | `gameDir`, `chosen`, `candidates[]` (each with a `Main` flag), `hasNativeDlss`, `reshade{}` |
 | `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `added[]`, `dryRun`, `manifestPath` |
-| `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` |
+| `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` (+ `note:"not installed"` when the game was never set up) |
 | `-Uninstall` | `removed[]`, `restored[]` |
 | `-Discover` | `launchers`, `root`, `folders[]`, `scans[]` (each scan is a `-Scan` shape) |
 
@@ -219,6 +229,17 @@ reads the PE headers directly:
 4. **Fallbacks** - sibling-module imports and file-name heuristics.
 
 Both D3D11 and D3D12 map to the `dxgi.dll` payload hook in ReShade.
+
+**Hybrid D3D + Vulkan titles.** Some games ship both renderers (e.g. RDR2 with
+`kSettingAPI_Vulkan`). When a D3D-detected exe also embeds `vkCreateInstance`
+and a ReShade Vulkan layer is registered, the installer routes through the
+Vulkan layer instead of a local `dxgi.dll` proxy - a local proxy would load a
+second ReShade instance into the process and the two fight each other. The
+game's `ReShade.ini` gets an `[INSTALL] BasePath` pointing at the game folder
+so the layer resolves the right config, addons and shaders. The D3D9-wins
+marker rule (GTA IV / Saints Row 2 carry d3d10/dxgi imports next to D3D9) only
+applies to 32-bit exes - D3D9 is a 32-bit-only API, so a 64-bit exe with a
+`Direct3DCreate9` string (RDR2) is always treated as D3D10/12.
 
 ## Provider comparison
 
@@ -304,6 +325,7 @@ Verified on GTA IV; treat it as a known-broken area marked for a **future fix**:
 
 ```
 DLSS5-Swapper.ps1    # backend - the whole tool (single file)
+Requirements.md      # hardware/driver/tooling requirements + kit rebuild sources
 DLSS5-UI/            # Electron desktop app
   main.js            #   main process (IPC, swapper bridge, icon cache)
   preload.js         #   context bridge (ipcRenderer -> window.dlss5)

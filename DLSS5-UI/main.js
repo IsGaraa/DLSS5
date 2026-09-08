@@ -32,7 +32,9 @@ function runSwapper(args) {
     ps.stdout.on('data', d => {
       out += d;
       const t = d.replace(/^\uFEFF/, '').trim();
-      if (t && win) win.webContents.send('log', t);
+      if (!t) return;
+      if (t.startsWith('{') || t.startsWith('[')) return; // final JSON payload - parsed, not console noise
+      if (win) win.webContents.send('log', t);
     });
     ps.stderr.on('data', d => {
       err += d;
