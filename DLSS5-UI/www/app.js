@@ -398,11 +398,12 @@ function renderInstall() {
   btn.disabled = false;
   exeWrap.classList.remove('hidden');
   exeSel.innerHTML = '';
-  const opts = [{ name: g.name, api: g.label || '' }].concat(g.alternates || []);
+  const opts = [{ name: g.name, api: g.label || '', bit: g.bit }].concat(g.alternates || []);
   for (const o of opts) {
     const opt = document.createElement('option');
     opt.value = o.name;
-    opt.textContent = o.name + (o.api ? '  (' + o.api + ')' : '');
+    opt.textContent = o.name + (o.api ? '  (' + o.api + ')' : '') + (Number(o.bit) === 32 ? '  [32-bit]' : '');
+    opt.dataset.bit = String(o.bit || 0);
     exeSel.appendChild(opt);
   }
   if (!g.api) {
@@ -434,12 +435,29 @@ function readInstallOptions() {
   };
 }
 
-async function doInstall() {
+function doInstall() {
   const g = state.selected;
   if (!g) return;
+  const exeSel = $('#o-exe');
+  const opt0 = exeSel && exeSel.selectedOptions && exeSel.selectedOptions[0];
+  const bit = opt0 && opt0.dataset ? Number(opt0.dataset.bit || 0) : Number(g.bit || 0);
+  const exeName = (opt0 && opt0.value) || g.name;
+  if (bit === 32) {
+    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. The DLSS 5 stack, its ReShade dxgi hook and the neural add-ons are <b>64-bit only</b> \u2014 the files will be copied into the game folder, but a 32-bit process will not load a 64-bit hook, so it will likely have no effect in-game.<br><br>Continue anyway?</div>', [
+      { label: 'Decline', cls: 'ghost', action: closeModal },
+      { label: 'Install anyway', cls: 'danger', action: () => { closeModal(); runInstall(g, true); } }
+    ]);
+    return;
+  }
+  runInstall(g, false);
+}
+
+async function runInstall(g, forced) {
   setBusy(true);
   try {
-    const r = await api.invoke('install', g.dir, readInstallOptions());
+    const opts = readInstallOptions();
+    if (forced) opts.force = true;
+    const r = await api.invoke('install', g.dir, opts);
     const bits = [r.provider];
     if (r.passes) bits.push(r.passes + ' pass' + (r.passes === 1 ? '' : 'es'));
     if (r.api) bits.push(r.api);
@@ -449,7 +467,7 @@ async function doInstall() {
     logLine('manifest: ' + (r.manifestPath || ''), 'ok');
     loadInstalled();
   } catch (e) {
-    toast('Install failed: ' + e.message);
+    toast('Install failed: ' + (String(e.message).split('\n')[0]));
     logLine('install failed: ' + e.message, 'err');
   } finally {
     setBusy(false);

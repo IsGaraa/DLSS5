@@ -215,7 +215,9 @@ own full neural pass, so quality scales with `-Passes`.
 
 ## Notes & limitations
 
-- **64-bit only** - the addons and the neural runtime are x86-64.
+- **64-bit only** - the addons and the neural runtime are x86-64. Installing a
+  32-bit game shows a warning; files are copied anyway with `-Force` (the UI's
+  "Install anyway"), but the 64-bit hook will not load in a 32-bit process.
 - **DirectX 8/9** need dgVoodoo2 (D3D9 -> D3D11 translation) before the stack
   can hook them; the script warns but copies with `-Force`.
 - **OpenGL** needs a ReShade `opengl32.dll` proxy that is not bundled.

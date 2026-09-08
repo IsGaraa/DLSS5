@@ -731,8 +731,11 @@ function Install-Stack {
         Write-Warn "OpenGL needs an opengl32.dll ReShade proxy; none is bundled."
         if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
     }
-    if ($exe.Bitness -ne 64) {
-        Fail "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit)."
+if ($exe.Bitness -ne 64) {
+        Write-Warn "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit) - the 64-bit hook will not load in a $($exe.Bitness)-bit process."
+        if (-not $Force) {
+            Fail "This build targets 64-bit games only ($($exe.Name) is $($exe.Bitness)-bit)."
+        }
     }
 
     # Feeder decision
