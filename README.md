@@ -109,7 +109,11 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
   - `renodx` - **RenoDX DLSS5 Generic**, a single NeuralUplift pass.
 - **ReShade integration** - dxgi proxy for DirectX 11/12 (32-bit and 64-bit),
   global / per-user Vulkan layer, `DLSS5_Feed.fx` + `lumenite_Kernel.fx`
-  motion-vector pipeline, `ReShade.ini` / `ReShadePreset.ini` wiring.
+  motion-vector pipeline, `ReShade.ini` / `ReShadePreset.ini` wiring. Installs
+  ship the **complete** ReShade shader package - all LumeniteFX/vort effects
+  plus `include/`, `Includes/` and `DrawText.fxh` - so every motion-vector
+  provider compiles (the kit once shipped only the feeder effect, which left
+  the default Lumenite Kernel provider uncompileable and the output dead).
 - **32-bit game support** - 32-bit titles get DLSS 5 through a 64-bit **host
   helper** (`host64\dlss5-feed-host64.exe` + its own ReShade) installed beside
   the game, with the 32-bit feeder add-on (`dlss5-feed.addon32`) hooked into
@@ -249,6 +253,15 @@ own full neural pass, so quality scales with `-Passes`.
 - **Vulkan** picks the machine-wide ReShade layer
   (`C:\ProgramData\ReShade\`); if absent it falls back to a per-user implicit
   layer under `%USERPROFILE%\.dlss5vulkanlayer`.
+- **Shader package** - `-BuildKit` harvests the whole ReShade shader tree from
+  the local rpcs3 source (`reshade-shaders\Shaders`: `lumenite_*.fx`,
+  `vort_*.fx`, `include/` and `Includes/`), and takes `DrawText.fxh` from the
+  optional `"shadercore"` entry in `sources.json`. The full tree is what the
+  installer deploys to `reshade-shaders\Shaders` next to the game's exe - the
+  Lumenite Kernel motion-vector provider (`-MVProvider 3`, the preset default)
+  includes `include/*.fxh` and `DrawText.fxh` at compile time, so without the
+  complete package it fails to compile and the feed reports zero motion
+  vectors.
 - Games with **anti-cheat** (BattlEye etc.) may reject injected modules; use
   the offline/Story modes where available.
 
