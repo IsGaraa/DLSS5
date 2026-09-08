@@ -90,12 +90,6 @@ Everything the UI does works straight from PowerShell:
 Add `-DryRun` to any install to preview changes without touching the disk, and
 `-Launch` to start the game right after installing.
 
-## Screenshots
-
-![Game library - cover-style tiles with executable icons](screenshots/app-library.png)
-
-![Install page - provider, passes, and executable picker](screenshots/app-install.png)
-
 ## Features
 
 - **Render API auto-detection** - PE import / delay-load / binary-string analysis
