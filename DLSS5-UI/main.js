@@ -111,9 +111,13 @@ async function checkForUpdate() {
     const from = await runGit(['rev-parse', 'HEAD']);
     await runGit(['fetch', 'origin', 'main']);
     const to = await runGit(['rev-parse', 'origin/main']);
-    if (from === to) return { status: 'current', from: from, to: to, behind: 0 };
-    const count = await runGit(['rev-list', '--count', 'HEAD..origin/main']);
-    return { status: 'update-available', from: from, to: to, behind: parseInt(count || '0', 10) };
+    const count = parseInt(await runGit(['rev-list', '--count', 'HEAD..origin/main']), 10) || 0;
+    // Only a *behind* HEAD is an update. A local HEAD that is ahead of origin
+    // (e.g. unpushed commits) must NOT fetch/nmerge/relaunch - previously this
+    // reported "update-available" for from != to, then `merge --ff-only` was a
+    // no-op and relaunched into an infinite update/restart loop.
+    if (count <= 0) return { status: 'current', from: from, to: to, behind: 0 };
+    return { status: 'update-available', from: from, to: to, behind: count };
   } catch (e) {
     return { status: 'error', message: e.message };
   }

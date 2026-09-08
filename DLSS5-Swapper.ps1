@@ -631,7 +631,22 @@ function Set-IniValues {
             $lines.Add('')
         }
     }
-    [System.IO.File]::WriteAllLines($Path, $lines, $enc)
+[System.IO.File]::WriteAllLines($Path, $lines, $enc)
+}
+
+function Remove-IniSection {
+    param([string]$Path, [string]$Section)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $lines = New-Object System.Collections.Generic.List[string]
+    $removing = $false
+    foreach ($ln in [System.IO.File]::ReadAllLines($Path)) {
+        if ($ln -match '^\s*\[([^\]]+)\]\s*$') {
+            $removing = ($matches[1] -ieq $Section)
+            if ($removing) { continue }
+        }
+        if (-not $removing) { $lines.Add($ln) }
+    }
+    [System.IO.File]::WriteAllLines($Path, $lines, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 # ---------------------------------------------------------------------------
@@ -980,6 +995,21 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         Install-OneFile 'renodx\renodx-dlss5.addon64' ($hostRel + 'renodx-dlss5.addon64')
         $hostLoadAddon = 'renodx-dlss5.addon64'
     }
+    # A provider switch never removed the OTHER provider's add-on: ReShade loads every
+    # *.addon64 found in AddonPath=.\ at startup, so a stale renodx/chicken consumer
+    # kept loading (and showing its overlay tab) even after switching. Drop the disabled
+    # provider's files from the game folder (and host64\ for 32-bit games) unless the
+    # user originally had that file there (i.e. it is backed up in this manifest).
+    $staleFiles = if ($Provider -eq 'chicken') { @('renodx-dlss5.addon64') } else { @('deep-fried-chicken.addon64','deep-fried-chicken-nvngx.dll','deep-fried-chicken.cfg') }
+    foreach ($rel in $staleFiles) {
+        foreach ($pfx in @('', 'host64\')) {
+            $sp = Join-Path $exeDir ($pfx + $rel)
+            if (-not (Test-Path -LiteralPath $sp)) { continue }
+            if ($manifest.replaced | Where-Object { $_.file -ieq ($pfx + $rel) }) { continue }
+            Write-Step "Removing stale $($pfx)$rel left behind by the previous provider..."
+            Remove-Item -LiteralPath $sp -Force
+        }
+    }
     if (-not $host64) { $earlyLoadAddon = $hostLoadAddon }
 
     if ($useFeeder) {
@@ -1050,6 +1080,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         }
     }
     Set-IniValues -Path $iniPath -Sections $sections
+    if ($Provider -eq 'chicken') { Remove-IniSection -Path $iniPath -Section 'RenoDX.DLSS5' }
     [void]$manifest.added.Add($iniPath.Substring($GameDir.Length).TrimStart('\'))
 
     # host64\ReShade.ini - the 64-bit helper's own ReShade hosts the neural consumer
@@ -1074,6 +1105,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
             }
         }
         Set-IniValues -Path $hostIni -Sections $hsections
+        if ($Provider -eq 'chicken') { Remove-IniSection -Path $hostIni -Section 'RenoDX.DLSS5' }
         [void]$manifest.added.Add($hostIni.Substring($GameDir.Length).TrimStart('\'))
     }
 
