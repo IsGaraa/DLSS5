@@ -9,6 +9,7 @@ Electron desktop UI. Built as a Windows-only reimplementation of the concepts in
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
 ![Electron UI](https://img.shields.io/badge/UI-Electron-47848F?logo=electron&logoColor=white)
 ![DLSS5](https://img.shields.io/badge/Stack-DLSS5%20Neural%20Rendering-9CE564)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 ## Quick start
 
