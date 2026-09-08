@@ -74,11 +74,161 @@
                                   "version":  "",
                                   "size":  51193
                               },
+    "shaders/DrawText.fxh":  {
+                                 "hash":  "B79CC4DFB3E98BCF4C06193D00EA7631D74F467F73A4DEEEEE13E71336D3E680",
+                                 "version":  "",
+                                 "size":  9359
+                             },
+    "shaders/include/lumenite_ColorManagement.fxh":  {
+                                                         "hash":  "116D3C41CD48F7787A2ED87EEFC65FB2D9083FC1AB609766A3FBCCA3E62649A6",
+                                                         "version":  "",
+                                                         "size":  7811
+                                                     },
+    "shaders/include/lumenite_Compute.fxh":  {
+                                                 "hash":  "736E3F39FC0C48A405C4D10B0D158502009DB940E2673FF778E6B919D3C1A55F",
+                                                 "version":  "",
+                                                 "size":  1843
+                                             },
+    "shaders/include/lumenite_Helpers.fxh":  {
+                                                 "hash":  "8826D613944BE27E14095982B20098FFF6D45E91C7D4028473C2F5B784C80028",
+                                                 "version":  "",
+                                                 "size":  3270
+                                             },
+    "shaders/include/lumenite_Projections.fxh":  {
+                                                     "hash":  "709EC414649B74E573CA0F12A5EF25998D332238F7CAB14A3D91053C8D388CAB",
+                                                     "version":  "",
+                                                     "size":  3523
+                                                 },
+    "shaders/Includes/vort_ACES.fxh":  {
+                                           "hash":  "967CB4914457F18CC91E8844E6F7CCEF0B353E4091E38F9C8667D36D45309B61",
+                                           "version":  "",
+                                           "size":  36642
+                                       },
+    "shaders/Includes/vort_Bloom.fxh":  {
+                                            "hash":  "A3AB7942B73C61DCABE9B83AE42DAFE65956C7A60D627AEA27EDE48A7CFB3C04",
+                                            "version":  "",
+                                            "size":  8242
+                                        },
+    "shaders/Includes/vort_BlueNoise.fxh":  {
+                                                "hash":  "A1ECA01DDC6BDFEF2B0C52601D297C59D7DABD71039D1489B7092532407CB455",
+                                                "version":  "",
+                                                "size":  354
+                                            },
+    "shaders/Includes/vort_ColorChanges.fxh":  {
+                                                   "hash":  "0CBD91DFF9AA5AB615A206F56BA760378810A5540D4F2928E35138C7980B1538",
+                                                   "version":  "",
+                                                   "size":  12499
+                                               },
+    "shaders/Includes/vort_ColorTex.fxh":  {
+                                               "hash":  "F5EEF2DB313C73B0419503295731C03BC4365FE1ED219F4AFA618707B59E8D6C",
+                                               "version":  "",
+                                               "size":  497
+                                           },
+    "shaders/Includes/vort_Defs.fxh":  {
+                                           "hash":  "A00E99ECE8B07899A7918A5248A2D603FD7F98882C795E3D31B9470CFE70A61C",
+                                           "version":  "",
+                                           "size":  23415
+                                       },
+    "shaders/Includes/vort_Depth.fxh":  {
+                                            "hash":  "92D4F0A93B3945452C861E580117BB875BB594157694B3C8741790EAF3826205",
+                                            "version":  "",
+                                            "size":  1892
+                                        },
+    "shaders/Includes/vort_Filters.fxh":  {
+                                              "hash":  "8D98A78F2FD7FE91F34BF4044D81094BD40FBB2C7B8F520EF66C5043F720F98D",
+                                              "version":  "",
+                                              "size":  4848
+                                          },
+    "shaders/Includes/vort_HDRTex.fxh":  {
+                                             "hash":  "5D3D002A6D4D0FC6E67DCDD4A68497163268FBB590C7477220DAC8F1293F916E",
+                                             "version":  "",
+                                             "size":  166
+                                         },
+    "shaders/Includes/vort_Motion_UI.fxh":  {
+                                                "hash":  "29783705B01D7B83A408D29A9D4B72C5A90012A91FB05EBDF1166BA9E9AEAC2B",
+                                                "version":  "",
+                                                "size":  4934
+                                            },
+    "shaders/Includes/vort_MotionBlur.fxh":  {
+                                                 "hash":  "67EDBC5DB1645D3C10C08375EB0BEC0911C59C4FC1D3DDE2D3E9C46A292EA35B",
+                                                 "version":  "",
+                                                 "size":  19846
+                                             },
+    "shaders/Includes/vort_MotionBlur_Cheap.fxh":  {
+                                                       "hash":  "0837C8151A50EF57C77BAB7A3B14DD4C3B92354E4021EE37F54EB47F3F5589C7",
+                                                       "version":  "",
+                                                       "size":  13122
+                                                   },
+    "shaders/Includes/vort_MotionUtils.fxh":  {
+                                                  "hash":  "2D353B23CEA6961CA40308A6AEBF1E56D509485A728399D5F6B36427B7023027",
+                                                  "version":  "",
+                                                  "size":  5765
+                                              },
+    "shaders/Includes/vort_MotionVectors.fxh":  {
+                                                    "hash":  "22D5C8F8A5F2CCCEE0DDDE994BA04A7BC5379C54B1B3E9C7CF7D46F1F8EAD87D",
+                                                    "version":  "",
+                                                    "size":  17148
+                                                },
+    "shaders/Includes/vort_OKColors.fxh":  {
+                                               "hash":  "5A0A8468E97EAA9E8E018246E12002A86E3FB0C7A9CB97A3BC38390FC3F854E2",
+                                               "version":  "",
+                                               "size":  16191
+                                           },
+    "shaders/Includes/vort_Static_UI.fxh":  {
+                                                "hash":  "CCD75EF28359B5324CF479FE568FBAD7586AC203F6B1921F1B6FAE48AE19BEF2",
+                                                "version":  "",
+                                                "size":  8274
+                                            },
+    "shaders/Includes/vort_TAA.fxh":  {
+                                          "hash":  "9B5C701FDACB37F15E565CA1AA3A861E4DF3F55DB493CD6589D509927ED08EDE",
+                                          "version":  "",
+                                          "size":  5837
+                                      },
+    "shaders/Includes/vort_Tonemap.fxh":  {
+                                              "hash":  "9413EEF6190303E920356310BC3AA2A270C052A1BCFDE44F024F0A8986095F30",
+                                              "version":  "",
+                                              "size":  2903
+                                          },
+    "shaders/lumenite_AnamorphicBloom.fx":  {
+                                                "hash":  "CBB145EADD884C8D2C903E51F85103EB2317677612FA7CFE6F2F6A9929AAE3EE",
+                                                "version":  "",
+                                                "size":  22017
+                                            },
     "shaders/lumenite_Kernel.fx":  {
                                        "hash":  "463D2BADA33FD3058383BC0273ABA74DF9D5F1DB75FE13D8F305A22BF94526E3",
                                        "version":  "",
                                        "size":  35865
                                    },
+    "shaders/lumenite_LSAO.fx":  {
+                                     "hash":  "620D01D7F7D011EDCD23BE478C1688C2FC547A7670E34803B942C5FB7B32EED5",
+                                     "version":  "",
+                                     "size":  16575
+                                 },
+    "shaders/lumenite_QuantAO.fx":  {
+                                        "hash":  "8DEB70E440E1CD94A34C48F14554A23631CE5CAD713B0FEFEF5B544974CA47C1",
+                                        "version":  "",
+                                        "size":  18289
+                                    },
+    "shaders/lumenite_QuantMotion.fx":  {
+                                            "hash":  "4A27B2F3676CD836E460BE3BB7A094CBF7DDD74E29B19D88FF7381066FCB94D8",
+                                            "version":  "",
+                                            "size":  20450
+                                        },
+    "shaders/lumenite_RTAO.fx":  {
+                                     "hash":  "6EDF4FFF7A85AFB8D417546B791B21B563A3189143ECEA089A4CB2FB1B42F5F9",
+                                     "version":  "",
+                                     "size":  11777
+                                 },
+    "shaders/lumenite_SSSR.fx":  {
+                                     "hash":  "A9AD257A2CE7A7BCFB080DBFD7F320448D9D58C755545FE5EADBA0653AD04DFB",
+                                     "version":  "",
+                                     "size":  13815
+                                 },
+    "shaders/lumenite_TRAA.fx":  {
+                                     "hash":  "2D9261686A83131AF838692BF7273D24A85EAD8D9047F943D1227757608ECD4E",
+                                     "version":  "",
+                                     "size":  21300
+                                 },
     "shaders/ReShade.fxh":  {
                                 "hash":  "6DABFBBAF968C3871905D2EA17F96572FF7B1CEC01310B5D0E5252B66B30174F",
                                 "version":  "",
@@ -98,5 +248,10 @@
                                  "hash":  "DA430E0A9C6EECEFA0D1B27D05E16C426FB5D04E808B194D914EAAC4B31BC0F8",
                                  "version":  "6.8.0.2156",
                                  "size":  4398080
-                             }
+                             },
+    "kit.json":  {
+                     "hash":  "6888F3666054B6C1A4CC051AF4B17E4D0FFDB22301A28BB30734A345D248A72B",
+                     "version":  "",
+                     "size":  6195
+                 }
 }

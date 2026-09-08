@@ -102,6 +102,7 @@ $Script:SourceDefaults = @{
     gta       = 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced'
     reshadeVk = 'C:\ProgramData\ReShade'
     reshade32 = 'C:\Users\drago\Downloads\Compressed\ReShade_6.8.0_Addon'
+    shadercore = 'C:\Users\drago\Downloads\Compressed\reshade-shaders-official\Shaders'
     dgvoodoo  = 'C:\Users\drago\Downloads\Compressed\dgVoodoo2-2.87.4'
 }
 
@@ -493,12 +494,27 @@ $dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vul
     $copy['runtime\nvngx_dlssnr.dll'] = $require.dlssnr
     $copy['plugins\deep-fried-chicken-nvngx.dll'] = (Join-Path $src.chicken 'deep-fried-chicken-nvngx.dll')
     $copy['reshade\dxgi.dll'] = $require.dxgi
-    $copy['shaders\DLSS5_Feed.fx'] = $require.feedfx
+$copy['shaders\DLSS5_Feed.fx'] = $require.feedfx
     $copy['shaders\lumenite_Kernel.fx'] = $require.kernel
-    foreach ($n in @('vort_Motion.fx','ReShade.fxh','ReShadeUI.fxh')) {
-        $p = Join-Path $src.rpcs3 "reshade-shaders\Shaders\$n"
-        if (Test-Path -LiteralPath $p) { $copy["shaders\$n"] = $p }
+    # shaders - ship the whole feeder shader package (LumeniteFX/vort providers,
+    # include/ + Includes/ + DrawText.fxh) so every MV provider actually compiles
+    $shRoot = Join-Path $src.rpcs3 'reshade-shaders\Shaders'
+    if (Test-Path -LiteralPath $shRoot) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $shRoot -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.fx','.fxh' })) {
+            $copy["shaders\$($f.Name)"] = $f.FullName
+        }
+        foreach ($sub in @('include','Includes')) {
+            $s = Join-Path $shRoot $sub
+            if (Test-Path -LiteralPath $s) {
+                Get-ChildItem -LiteralPath $s -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+                    $copy["shaders\$($_.FullName.Substring($shRoot.Length).TrimStart('\'))"] = $_.FullName
+                }
+            }
+        }
     }
+    $dt = Join-Path $src.shadercore 'DrawText.fxh'
+    if (Test-Path -LiteralPath $dt) { $copy['shaders\DrawText.fxh'] = $dt }
+    else { Write-Warn "no source for optional 'shaders\DrawText.fxh' (set shadercore) - lumenite_Kernel.fx will not compile" }
 if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
         foreach ($n in @('ReShade64.dll','ReShade64.json','ReShade32.dll','ReShade32.json')) {
             $p = Join-Path $src.reshadeVk $n
@@ -527,8 +543,9 @@ if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
         else { Write-Warn "no source for optional 'reshade\dxgi-x86.dll' and no prior kit copy - 32-bit ReShade hook skipped" }
     }
 
-    foreach ($rel in $copy.Keys) {
+foreach ($rel in $copy.Keys) {
         $dest = Join-Path $Script:Kit $rel
+        New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
         Copy-Item -LiteralPath $copy[$rel] -Destination $dest -Force
         $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
         $manifest[($rel -replace '\\','/')] = [ordered]@{ hash = $hash; version = (Get-FileProductVersion $dest); size = (Get-Item -LiteralPath $dest).Length }
@@ -963,14 +980,14 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
 
     # shaders
+# shaders - whole package (root effects + include/ + Includes/) so every MV provider compiles
     $shaderDestDir = Join-Path $exeDir 'reshade-shaders\Shaders'
-    foreach ($n in @('DLSS5_Feed.fx','lumenite_Kernel.fx','vort_Motion.fx','ReShade.fxh','ReShadeUI.fxh')) {
-        $src = Join-Path $Script:Kit "shaders\$n"
-        if (-not (Test-Path -LiteralPath $src)) { continue }
-        $dest = Join-Path $shaderDestDir $n
+    foreach ($sf in @(Get-ChildItem -LiteralPath (Join-Path $Script:Kit 'shaders') -Recurse -File -ErrorAction SilentlyContinue)) {
+        $rel = $sf.FullName.Substring((Join-Path $Script:Kit 'shaders').Length).TrimStart('\')
+        $dest = Join-Path $shaderDestDir $rel
         Add-Replace $dest
-        New-Item -ItemType Directory -Path $shaderDestDir -Force | Out-Null
-        Copy-Item -LiteralPath $src -Destination $dest -Force
+        New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+        Copy-Item -LiteralPath $sf.FullName -Destination $dest -Force
         [void]$manifest.added.Add($dest.Substring($GameDir.Length).TrimStart('\'))
     }
 
