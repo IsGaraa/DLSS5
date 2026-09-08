@@ -11,6 +11,15 @@ Electron desktop UI. Built as a Windows-only reimplementation of the concepts in
 ![DLSS5](https://img.shields.io/badge/Stack-DLSS5%20Neural%20Rendering-9CE564)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
+> **⚠️ WARNING - DO NOT USE IN MULTIPLAYER / ONLINE GAMES**
+>
+> This tool injects DLLs and shader layers into the game process. In any
+> multiplayer, online, ranked, or anti-cheat-protected game (BattlEye, EAC,
+> Vanguard, Ricochet, and the like) this is considered cheating and **can get
+> your account banned** - sometimes permanently, hardware bans included. Use it
+> **only** in offline / single-player titles and modes. You are responsible for
+> what you inject into.
+
 ## Quick start
 
 ### 1. Get the code
