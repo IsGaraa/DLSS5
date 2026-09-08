@@ -178,12 +178,13 @@ function gameCard(g) {
   chips.className = 'chips cover-meta';
   const badge = document.createElement('span');
   badge.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
-  badge.textContent = g.api ? (g.label || g.api) : 'undetected';
+  const apiTxt = g.api ? (g.label || g.api) : 'undetected';
+  badge.textContent = apiTxt;
+  if (g.via && g.via !== apiTxt) badge.title = 'detected via ' + g.via;
   chips.appendChild(badge);
   if (g.native) chips.appendChild(chip('accent', 'Native DLSS'));
   if (g.reshade) chips.appendChild(chip('blue', 'ReShade ' + g.reshade.ver));
   if (g.bit) chips.appendChild(chip('dim', g.bit + '-bit'));
-  if (g.via) chips.appendChild(chip('dim', g.via));
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
   if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
 
