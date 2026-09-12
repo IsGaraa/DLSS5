@@ -425,6 +425,7 @@ function renderInstall() {
   const eng = $('#inst-engine');
   const btn = $('#btn-install');
   const note = $('#inst-note');
+  const verifyInst = $('#btn-verify-inst');
   const exeWrap = $('#inst-exe-wrap');
   const exeSel = $('#o-exe');
   if (!g) {
@@ -432,6 +433,7 @@ function renderInstall() {
     eng.textContent = 'pick one in the library';
     eng.className = 'pill dim';
     btn.disabled = true;
+    verifyInst.disabled = true;
     note.classList.add('hidden');
     exeWrap.classList.add('hidden');
     return;
@@ -440,6 +442,7 @@ function renderInstall() {
   eng.textContent = g.api ? (g.label || g.api) : 'undetected';
   eng.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
   btn.disabled = false;
+  verifyInst.disabled = false;
   exeWrap.classList.remove('hidden');
   exeSel.innerHTML = '';
   const opts = [{ name: g.name, api: g.label || '', bit: g.bit }].concat(g.alternates || []);
@@ -613,6 +616,7 @@ async function loadBackups() {
     if (b.feeder === false) chips.appendChild(chip('blue', 'native DLSS'));
     const btns = document.createElement('div');
     btns.className = 'gc-btns';
+    btns.appendChild(mkBtn('ghost', 'Verify', () => verifyGame({ name: b.dir.split(/[\\/]/).pop(), dir: b.dir })));
     btns.appendChild(mkBtn('ghost', 'Details', () => backupDetails(b)));
     btns.appendChild(mkBtn('ghost', 'Find where', () => { try { api.invoke('open-folder', b.dir); } catch (e) {} }));
     btns.appendChild(mkBtn('danger', 'Restore originals', () => restoreBackup(b.dir)));
@@ -730,6 +734,7 @@ function bind() {
   });
 
   $('#btn-install').onclick = doInstall;
+  $('#btn-verify-inst').onclick = () => { if (state.selected) verifyGame(state.selected); };
 }
 
 async function onAddFolder() {

@@ -266,6 +266,7 @@ body {
 
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; }
 .card-head b { font-size: 14px; }
+.head-right { display: flex; align-items: center; gap: 10px; }
 
 .lbl { display: block; font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin: 16px 0 7px; }
 .lbl .val { color: var(--accent); font-weight: 700; }
