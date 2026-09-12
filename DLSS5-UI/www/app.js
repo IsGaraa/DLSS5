@@ -236,8 +236,8 @@ function gameCard(g) {
   btns.className = 'gc-btns';
   const install = mkBtn('accent grow', 'Install', () => { state.selected = g; showPage('install'); });
   const verify = mkBtn('ghost', 'Verify', () => verifyGame(g));
-  const redetect = mkBtn('ghost', '\u21BB', () => reDetect(g));
-  redetect.title = 'Re-detect renderer';
+  const redetect = mkBtn('ghost', 'Re-detect', () => reDetect(g));
+  redetect.title = 'Re-detect the renderer';
   const un = mkBtn('danger', 'Restore', () => uninstallGame(g));
   if (!g.reshade && !g.native && g.api) un.textContent = 'Uninstall';
   un.title = 'Remove the DLSS5 stack and restore original files';
