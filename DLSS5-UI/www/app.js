@@ -218,7 +218,7 @@ function gameCard(g) {
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
   if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
 
-  const btns = document.createElement('div');
+const btns = document.createElement('div');
   btns.className = 'gc-btns';
   const install = mkBtn('accent', 'Install', () => { state.selected = g; showPage('install'); });
   const verify = mkBtn('ghost', 'Verify', () => verifyGame(g));
@@ -226,12 +226,15 @@ function gameCard(g) {
   const open = mkBtn('ghost icon', '\u{1F4C2}', () => api.invoke('open-folder', g.dir));
   const un = mkBtn('danger', 'Restore', () => uninstallGame(g));
   if (!g.reshade && !g.native && g.api) un.textContent = 'Uninstall';
+  const remove = mkBtn('ghost icon', '\u00D7', () => removeGame(g));
+  remove.title = 'Remove this game from the library (does not touch files)';
   un.style.marginLeft = 'auto';
   btns.appendChild(install);
   btns.appendChild(verify);
   btns.appendChild(redetect);
   btns.appendChild(open);
   btns.appendChild(un);
+  btns.appendChild(remove);
 
   body.appendChild(nm);
   body.appendChild(chips);
@@ -544,6 +547,32 @@ function uninstallGame(g) {
         } finally {
           setBusy(false);
         }
+      }
+    }
+  ]);
+}
+
+function removeGame(g) {
+  const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
+  const intro = inst
+    ? '<div class="m-intro">Remove <b>' + esc(g.name) + '</b> from the library? Its DLSS5 install and backups stay untouched on disk - the game just stops appearing here. Re-add the folder later to install again.</div>'
+    : '<div class="m-intro">Remove <b>' + esc(g.name) + '</b> from the library? This drops the card and removes the folder from the scanned-folders list, so a plain rescan won\u2019t bring it back. No game files are touched.</div>';
+  showModal('Remove from library', intro, [
+    { label: 'Cancel', cls: 'ghost', action: closeModal },
+    {
+      label: 'Remove', cls: 'danger', action: async () => {
+        closeModal();
+        const low = String(g.dir).toLowerCase();
+        state.library = state.library.filter(x => String(x.dir).toLowerCase() !== low);
+        state.folders = state.folders.filter(x => String(x).toLowerCase() !== low);
+        if (state.selected && String(state.selected.dir).toLowerCase() === low) state.selected = null;
+        state.savedAt = Date.now();
+        renderLibrary();
+        renderInstall();
+        try { await api.invoke('library-save', state.folders); } catch (e) {}
+        try { await api.invoke('library-cache-save', { savedAt: state.savedAt, games: state.library }); } catch (e) {}
+        toast('Removed ' + g.name + ' from the library');
+        logLine('removed from library: ' + g.name + ' (' + g.dir + ')', '');
       }
     }
   ]);
