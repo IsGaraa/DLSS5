@@ -183,19 +183,32 @@ function gameCard(g) {
   card.className = 'card card-hover game-card';
   if (state.selected && state.selected.path === g.path) card.classList.add('selected');
 
-  const thumb = document.createElement('div');
-  thumb.className = 'cover-thumb';
+  const hero = document.createElement('div');
+  hero.className = 'cover-thumb';
+  const tile = document.createElement('div');
+  tile.className = 'cover-tile';
   const iconImg = document.createElement('img');
   iconImg.alt = '';
   iconImg.draggable = false;
   const letter = document.createElement('span');
   letter.className = 'cover-letter';
   letter.textContent = (g.name || '?').trim().charAt(0).toUpperCase();
-  thumb.appendChild(iconImg);
-  thumb.appendChild(letter);
+  tile.appendChild(iconImg);
+  tile.appendChild(letter);
   api.getIcon(g.path).then(url => {
     if (url) { iconImg.src = url; letter.classList.add('has-icon'); }
   }).catch(() => {});
+  hero.appendChild(tile);
+
+  const heroActs = document.createElement('div');
+  heroActs.className = 'hero-acts';
+  const open = mkBtn('hero-act', '\u{1F4C2}', () => api.invoke('open-folder', g.dir));
+  open.title = 'Open game folder';
+  const remove = mkBtn('hero-act danger', '\u00D7', () => removeGame(g));
+  remove.title = 'Remove this game from the library (does not touch files)';
+  heroActs.appendChild(open);
+  heroActs.appendChild(remove);
+  hero.appendChild(heroActs);
 
   const body = document.createElement('div');
   body.className = 'cover-body';
@@ -203,11 +216,12 @@ function gameCard(g) {
   const nm = document.createElement('div');
   nm.className = 'cover-name';
   nm.textContent = g.name;
+  nm.title = g.name;
 
   const chips = document.createElement('div');
   chips.className = 'chips cover-meta';
   const badge = document.createElement('span');
-  badge.className = 'pill ' + (g.api ? apiClass(g.api) : 'amber');
+  badge.className = 'chip ' + (g.api ? apiClass(g.api) : 'amber');
   const apiTxt = g.api ? (g.label || g.api) : 'undetected';
   badge.textContent = apiTxt;
   if (g.via && g.via !== apiTxt) badge.title = 'detected via ' + g.via;
@@ -218,29 +232,25 @@ function gameCard(g) {
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
   if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
 
-const btns = document.createElement('div');
+  const btns = document.createElement('div');
   btns.className = 'gc-btns';
-  const install = mkBtn('accent', 'Install', () => { state.selected = g; showPage('install'); });
+  const install = mkBtn('accent grow', 'Install', () => { state.selected = g; showPage('install'); });
   const verify = mkBtn('ghost', 'Verify', () => verifyGame(g));
-  const redetect = mkBtn('ghost', '\u21BB Re-detect', () => reDetect(g));
-  const open = mkBtn('ghost icon', '\u{1F4C2}', () => api.invoke('open-folder', g.dir));
+  const redetect = mkBtn('ghost', '\u21BB', () => reDetect(g));
+  redetect.title = 'Re-detect renderer';
   const un = mkBtn('danger', 'Restore', () => uninstallGame(g));
   if (!g.reshade && !g.native && g.api) un.textContent = 'Uninstall';
-  const remove = mkBtn('ghost icon', '\u00D7', () => removeGame(g));
-  remove.title = 'Remove this game from the library (does not touch files)';
-  un.style.marginLeft = 'auto';
+  un.title = 'Remove the DLSS5 stack and restore original files';
   btns.appendChild(install);
   btns.appendChild(verify);
   btns.appendChild(redetect);
-  btns.appendChild(open);
   btns.appendChild(un);
-  btns.appendChild(remove);
 
   body.appendChild(nm);
   body.appendChild(chips);
   body.appendChild(btns);
 
-  card.appendChild(thumb);
+  card.appendChild(hero);
   card.appendChild(body);
   return card;
 }

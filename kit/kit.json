@@ -30,9 +30,9 @@
                                                  "size":  3072
                                              },
     "renodx/renodx-dlss5.addon64":  {
-                                        "hash":  "D5ADF82EB44B065F4C590AC91FE824BAB07AFEA0EB9F994BDE936710C8593952",
-                                        "version":  "0.2026.0828.0517",
-                                        "size":  1732608
+                                        "hash":  "BA9F87C948D12367C3EEC9D208E6E15A345A5F551506804AACBB22E4E9906C19",
+                                        "version":  "0.2026.0828.2110",
+                                        "size":  638464
                                     },
     "reshade/dxgi.dll":  {
                              "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
@@ -250,8 +250,8 @@
                                  "size":  4398080
                              },
     "kit.json":  {
-                     "hash":  "6888F3666054B6C1A4CC051AF4B17E4D0FFDB22301A28BB30734A345D248A72B",
+                     "hash":  "36B910B6799085CBE395D11A1A29A6049FAC8B74E3875DF3CDC5CA9F2A1C951E",
                      "version":  "",
-                     "size":  6195
+                     "size":  16534
                  }
 }
