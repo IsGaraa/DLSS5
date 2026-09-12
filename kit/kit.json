@@ -10,29 +10,29 @@
                                       "size":  271872
                                   },
     "chicken/deep-fried-chicken.addon64":  {
-                                               "hash":  "106143DE0D74853B966A7141C19C2BB0FB46E7CE32C7F67D830D2DC5CDDF80EC",
-                                               "version":  "1.4.8.0-alpha",
-                                               "size":  641024
+                                               "hash":  "998B0615CA1B70EC81894A5738EDE655F2977608C4E5616E4CCFCB82B83E70C9",
+                                               "version":  "1.7.4.0-alpha",
+                                               "size":  1526784
                                            },
-    "chicken/deep-fried-chicken-nvngx.dll":  {
-                                                 "hash":  "E218CE8C20858D58E53A85B2AFC2C1E6F55768A96659E819FF40D71E872393A3",
-                                                 "version":  "",
-                                                 "size":  3072
-                                             },
+"chicken/deep-fried-chicken-nvngx.dll":  {
+                                                  "hash":  "09F43861436E6093F52AF80A64F52A69740558CCD063A9C64A20E1685EE318FD",
+                                                  "version":  "",
+                                                  "size":  3072
+                                              },
     "host64/dlss5-feed-host64.exe":  {
                                          "hash":  "D37CD3015458EFD5C1FEB2DA6AFA4215B45484940AD419A51803F130E18BA66F",
                                          "version":  "",
                                          "size":  131072
                                      },
-    "plugins/deep-fried-chicken-nvngx.dll":  {
-                                                 "hash":  "E218CE8C20858D58E53A85B2AFC2C1E6F55768A96659E819FF40D71E872393A3",
-                                                 "version":  "",
-                                                 "size":  3072
-                                             },
+"plugins/deep-fried-chicken-nvngx.dll":  {
+                                                  "hash":  "09F43861436E6093F52AF80A64F52A69740558CCD063A9C64A20E1685EE318FD",
+                                                  "version":  "",
+                                                  "size":  3072
+                                              },
     "renodx/renodx-dlss5.addon64":  {
-                                        "hash":  "BA9F87C948D12367C3EEC9D208E6E15A345A5F551506804AACBB22E4E9906C19",
-                                        "version":  "0.2026.0828.2110",
-                                        "size":  638464
+                                        "hash":  "D5ADF82EB44B065F4C590AC91FE824BAB07AFEA0EB9F994BDE936710C8593952",
+                                        "version":  "",
+                                        "size":  1732608
                                     },
     "reshade/dxgi.dll":  {
                              "hash":  "0CEE63F9C9F13F3AC909C5B4903F4DBB4B719A7AB3B4F13B0DEAF83C814B94F7",
