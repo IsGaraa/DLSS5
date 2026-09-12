@@ -24,7 +24,11 @@
                                          "version":  "",
                                          "size":  131072
                                      },
-"plugins/deep-fried-chicken-nvngx.dll":  {
+    "mfgunlock/renodx-mfgunlock.addon64":  {
+                                                "hash":  "64184BB370F223C3CABB359010A9A64E114CDAE6B62D8B014A731A602AF0A0DA",
+                                                "version":  "0.9",
+                                                "size":  601088
+                                            },"plugins/deep-fried-chicken-nvngx.dll":  {
                                                   "hash":  "09F43861436E6093F52AF80A64F52A69740558CCD063A9C64A20E1685EE318FD",
                                                   "version":  "",
                                                   "size":  3072
@@ -64,11 +68,12 @@
                                    "version":  "310,8,0,0",
                                    "size":  58956400
                                },
-    "runtime/nvngx_dlssnr.dll":  {
-                                     "hash":  "8270B350CD82DE5CE89806872CDD6B6A9249B80836B91BBEB3573470744CC206",
-                                     "version":  "310,8,0,0",
-                                     "size":  165840496
-                                 },
+"runtime/nvngx_dlssnr.dll":  {
+                                      "hash":  "8270B350CD82DE5CE89806872CDD6B6A9249B80836B91BBEB3573470744CC206",
+                                      "version":  "310,8,0,0",
+                                      "size":  165840496
+                                  },
+
     "shaders/DLSS5_Feed.fx":  {
                                   "hash":  "CDAC08A721B14B97187DD86C5B5BEAD157C9063D7EE859A0F131A8EE791695F1",
                                   "version":  "",
@@ -249,9 +254,9 @@
                                  "version":  "6.8.0.2156",
                                  "size":  4398080
                              },
-    "kit.json":  {
-                     "hash":  "36B910B6799085CBE395D11A1A29A6049FAC8B74E3875DF3CDC5CA9F2A1C951E",
-                     "version":  "",
-                     "size":  16534
-                 }
+"kit.json":  {
+                      "hash":  "AFB712487A2D99FAC0C61F139CD16FFA29ADAFFDE2F0AA867FACDF9B7E2A2775",
+                      "version":  "",
+                      "size":  16874
+                  }
 }

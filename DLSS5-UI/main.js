@@ -68,6 +68,7 @@ function buildInstallArgs(folder, o) {
   if (o.texBoost) a.push('-TextureBoost');
   if (o.uplift) a.push('-NeuralUplift');
   a.push('-Feeder', o.feeder);
+  if (o.mfgAddon) a.push('-MFGAddon');
   if (o.exe) a.push('-Exe', o.exe);
   if (o.force) a.push('-Force');
   if (o.launch) a.push('-Launch');
@@ -159,6 +160,7 @@ function listBackups(folders) {
         apiLabel: arr && arr.apiLabel,
         exe: arr && arr.exe,
         feeder: arr && arr.feeder,
+        mfgAddon: !!(arr && arr.mfgAddon),
         date: arr && arr.date,
         size,
         added: added,

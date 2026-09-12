@@ -89,6 +89,9 @@ Everything the UI does works straight from PowerShell:
 # RenoDX with NeuralUplift
 .\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -NeuralUplift
 
+# MFG Unlock addon (ReShade addon, temporal midpoint correction, in-memory).
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -MFGAddon
+
 # verify
 .\DLSS5-Swapper.ps1 -Verify -GamePath "C:\Games\SomeGame"
 
@@ -139,6 +142,14 @@ Add `-DryRun` to any install to preview changes without touching the disk, and
   `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
   Switching providers also removes the disabled consumer's leftover add-on and
   its `[RenoDX.DLSS5]` ini section, so a stale provider never keeps loading.
+- **MFG Unlock addon (optional)** - the **MFGUnlock** ReShade addon
+  (mavismmg/MFGAdaUnlock-RenoDx, a fork of Dreamt's) that unlocks 3x/4x/6x DLSS
+  **Multi Frame Generation** on RTX 40-series (temporal midpoint correction,
+  in-memory only, nothing in the game is modified). Dropped into the game's
+  ReShade addon path as `renodx-mfgunlock.addon64`, it drives the multiplier
+  through the game's own FG selector and its `MFG Unlock` ReShade panel
+  (`[RenoDX.MFGUnlock]` in `ReShade.ini`). Journaled and removed on
+  `-Uninstall`. See *Notes & limitations*.
 - **Info tab** - shows the app version, runtime (Electron/Chromium/Node), OS
   and the repository remote, with an *Open GitHub page* button and the
   *Report a bug* form (pre-filled with OS, versions and the console log tail).
@@ -176,7 +187,7 @@ UI and for scripting:
 | Command | Response fields |
 |---|---|
 | `-Scan` | `gameDir`, `chosen`, `candidates[]` (each with a `Main` flag), `hasNativeDlss`, `reshade{}` |
-| `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `added[]`, `dryRun`, `manifestPath` |
+| `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `mfg`, `mfgProxy`, `mfgAddon`, `added[]`, `dryRun`, `manifestPath` |
 | `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` (+ `note:"not installed"` when the game was never set up) |
 | `-Uninstall` | `removed[]`, `restored[]` |
 | `-Discover` | `launchers`, `root`, `folders[]`, `scans[]` (each scan is a `-Scan` shape) |
@@ -197,6 +208,8 @@ UI and for scripting:
 | `-CleanFry` | switch | off | Chicken multi-pass cleanup |
 | `-TextureBoost` | switch | off | Experimental 8K path |
 | `-NeuralUplift` | switch | off | RenoDX NeuralUplift |
+| `-NeuralUplift` | switch | off | RenoDX NeuralUplift |
+| `-MFGAddon` | switch | off | Install the MFG Unlock ReShade addon (RTX 40) |
 | `-KitPath` | path | `.\kit` | Override the file kit location |
 | `-Exe` | name.exe | auto | Pick a specific executable |
 | `-DryRun` | switch | off | Do not write anything |
@@ -295,6 +308,18 @@ own full neural pass, so quality scales with `-Passes`.
   vectors.
 - Games with **anti-cheat** (BattlEye etc.) may reject injected modules; use
   the offline/Story modes where available.
+- **MFG Unlock addon** (`-MFGAddon`) unlocks higher DLSS **Multi Frame
+  Generation** multipliers through ReShade (mavismmg/MFGAdaUnlock-RenoDx):
+  loaded as `renodx-mfgunlock.addon64` and configured through the game's own
+  FG selector plus the **MFG Unlock** ReShade panel. RTX 40 **only**, **x64-only**
+  (it loads through the 64-bit ReShade hook). It also needs a Streamline
+  DLSS-FG title and a modern `nvngx_dlssg.dll`; GTA V Enhanced's bundled 2.9.1
+  wrapper caps it at 4x. First launch after install may stutter while DLSS-G
+  kernels compile - restart the game once before judging quality. Its settings
+  live in `ReShade.ini` under `[RenoDX.MFGUnlock]` (addon-owned); the addon file
+  itself is journaled and removed on `-Uninstall`. If menu slowdowns appear when
+  RenoDX DLSS5 is also installed, the MFGUnlock README reports Streamline
+  2.12.129 / 310.7.129 as the known-good combined runtime set.
 
 ### 32-bit / host-helper path: known issues (future fix)
 
@@ -340,6 +365,8 @@ DLSS5-UI/            # Electron desktop app
   library-cache.json #   last scan, loads instantly at startup (gitignored)
 kit/                 # harvested binary kit (built by -BuildKit, tracked via Git LFS;
                      #   local-only extras like dgvoodoo/ are gitignored - see Notes)
+  mfgunlock/          #   MFG Unlock ReShade addon (mavismmg/MFGAdaUnlock-RenoDx)
+    renodx-mfgunlock.addon64  #     the -MFGAddon in-memory unlock
 ```
 
 ## Credits
@@ -349,5 +376,9 @@ kit/                 # harvested binary kit (built by -BuildKit, tracked via Git
 - [Deep Fried Chicken](https://www.nexusmods.com/site/mods/1692) - multi-pass
   neural provider
 - [RenoDX](https://www.nexusmods.com/site/mods/943) - DLSS5 Generic addon
+- [MFGUnlock (MFGAdaUnlock-RenoDx)](https://github.com/mavismmg/MFGAdaUnlock-RenoDx)
+  by mavismmg (fork of [ImDreamt's original](https://github.com/ImDreamt/MFGAdaUnlock-RenoDx))
+  - the ReShade-addon MFG unlock with the temporal midpoint fix, integrated as
+  the `-MFGAddon` option
 - [DLSS 5 Swapper](https://github.com/rakanki911/DLSS5-Swapper) - original app
   concept this script reimplements

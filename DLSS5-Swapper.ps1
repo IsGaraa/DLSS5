@@ -36,7 +36,11 @@
     -CleanFry                                            enable multi-pass cleanup
     -TextureBoost                                        enable experimental 8K path
     -NeuralUplift                                        renodx NeuralUplift
-    -Feeder auto|forced|off                              DLSS5-Feeder transport
+-Feeder auto|forced|off                              DLSS5-Feeder transport
+    -MFGAddon                                            install the MFG Unlock ReShade
+                                                          addon (mavismmg/MFGAdaUnlock-
+                                                          RenoDx) alongside the stack for
+                                                          Streamline DLSS-FG titles on RTX 40
     -Exe <name.exe>                                      pick a specific executable
     -KitPath <folder>                                    kit location override
     -DryRun                                              do not write anything
@@ -73,6 +77,7 @@ param(
     [switch]$NeuralUplift,
     [ValidateSet('auto','forced','off')]
     [string]$Feeder = 'auto',
+    [switch]$MFGAddon,
     [string]$KitPath = '',
     [string]$ExeFilter = '',
 [switch]$Force,
@@ -104,6 +109,7 @@ $Script:SourceDefaults = @{
     reshade32 = 'C:\Users\drago\Downloads\Compressed\ReShade_6.8.0_Addon'
     shadercore = 'C:\Users\drago\Downloads\Compressed\reshade-shaders-official\Shaders'
     dgvoodoo  = 'C:\Users\drago\Downloads\Compressed\dgVoodoo2-2.87.4'
+    mfgunlock = 'C:\Users\drago\Downloads\Compressed\MFGAdaUnlock'
 }
 
 $Script:NOT_A_GAME = '^(unins|setup|install|vcredist|vc_redist|dxsetup|dxwebsetup|oalinst|uninstall|crashreport|crashhandler|unitycrashhandler|easyanticheat|eac|battleye|be_service|launcher|activation|patch|update|dotnetfx|touchup|rapidcrc|autorun|autoplay|quicksfv|readme|config|benchmark|report|helper|service|cleanup|modorganizer|redlauncher|skse\d*_loader|hlds\b|srcds\b|steamerrorreporter|dgvoodoocpl|reshade_setup)'
@@ -478,7 +484,7 @@ function New-Kit {
         if (-not (Test-Path -LiteralPath $require[$k])) { Fail "Missing source for '$k': $($require[$k]). Put the paths into sources.json or place the file at the known location." }
     }
 
-$dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','host64','shaders','dgvoodoo')
+$dirs = @('addons','chicken','renodx','runtime','plugins','reshade','reshade-vulkan','host64','shaders','dgvoodoo','mfgunlock')
     foreach ($d in $dirs) { New-Item -ItemType Directory -Path (Join-Path $Script:Kit $d) -Force | Out-Null }
 
     $manifest = [ordered]@{}
@@ -547,6 +553,16 @@ if (Test-Path -LiteralPath (Join-Path $src.reshadeVk 'ReShade64.dll')) {
         $existing = Join-Path $Script:Kit 'reshade\dxgi-x86.dll'
         if (Test-Path -LiteralPath $existing) { $copy['reshade\dxgi-x86.dll'] = $existing }
         else { Write-Warn "no source for optional 'reshade\dxgi-x86.dll' and no prior kit copy - 32-bit ReShade hook skipped" }
+    }
+
+    # MFG Unlock (mavismmg/MFGAdaUnlock-RenoDx) - ReShade addon that unlocks 3x/4x/6x on
+    # RTX 40 with the temporal midpoint correction, in-memory (no proxy rename needed).
+    $mfgAddonSrc = Join-Path $src.mfgunlock 'renodx-mfgunlock.addon64'
+    if (Test-Path -LiteralPath $mfgAddonSrc) { $copy['mfgunlock\renodx-mfgunlock.addon64'] = $mfgAddonSrc }
+    else {
+        $existingAddon = Join-Path $Script:Kit 'mfgunlock\renodx-mfgunlock.addon64'
+        if (Test-Path -LiteralPath $existingAddon) { $copy['mfgunlock\renodx-mfgunlock.addon64'] = $existingAddon }
+        else { Write-Warn "no source for optional 'mfgunlock\renodx-mfgunlock.addon64' and no prior kit copy - the -MFGAddon unlock is unavailable" }
     }
 
 foreach ($rel in $copy.Keys) {
@@ -863,7 +879,7 @@ function Get-ManifestProp {
 # install
 # ---------------------------------------------------------------------------
 function Install-Stack {
-    param($GameDir, $ApiOverride, $Provider, $Passes, $WorkPercent, $StyleIndex, $NrxPreset, $NrxIntensity, $SymMv, $SymCleanFry, $SymTexBoost, $SymUplift, $FeederMode, $ExeName)
+    param($GameDir, $ApiOverride, $Provider, $Passes, $WorkPercent, $StyleIndex, $NrxPreset, $NrxIntensity, $SymMv, $SymCleanFry, $SymTexBoost, $SymUplift, $FeederMode, $ExeName, $MfgAddon = $false)
     if (-not (Test-Path -LiteralPath $Script:Kit)) { Fail "No kit folder. Run: .\DLSS5-Swapper.ps1 -BuildKit" }
     if (-not (Test-Kit)) { Fail "Kit incomplete. Rebuild with: .\DLSS5-Swapper.ps1 -BuildKit" }
 
@@ -958,6 +974,21 @@ $native = (Test-Path -LiteralPath (Join-Path $exeDir 'sl.interposer.dll')) -or
 if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     else { Write-Step "Transport: game native DLSS (Feeder skipped)" }
 
+    # MFG Unlock addon (optional): ReShade addon build of the same in-memory approach
+    # (mavismmg/MFGAdaUnlock-RenoDx). Dropped into the addon path beside the exe; it drives
+    # the multiplier through the game's own FG selector plus its ReShade panel (and can go to
+    # 3x/4x/6x). It is x64-only because ReShade's 64-bit hook is the only addon host we ship.
+    if ($MfgAddon) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Script:Kit 'mfgunlock\renodx-mfgunlock.addon64'))) {
+            Fail "The -MFGAddon unlock was requested but kit\mfgunlock\renodx-mfgunlock.addon64 is missing. Rebuild the kit (-BuildKit) or add the MFG Unlock release to sources.json ('mfgunlock')."
+        }
+        if ($exe.Bitness -ne 64) {
+            Write-Warn "$($exe.Name) is a $($exe.Bitness)-bit executable but the MFG addon is x64-only - it cannot load in a 32-bit process."
+            if (-not $Force) { Fail "Aborting the MFG addon install for a 32-bit game (use -Force to place it anyway)." }
+        }
+        Write-Step "MFG Unlock addon: renodx-mfgunlock.addon64 (ReShade panel, game menu multiplier)"
+    }
+
     # backup journal + helpers (before touching the disk)
     $backDir = Join-Path $GameDir '_DLSS5_Backup'
     if (-not $DryRun) {
@@ -986,6 +1017,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         apiLabel = $label
         provider = $Provider
         feeder = [bool]$useFeeder
+        mfgAddon = [bool]$MfgAddon
         host64 = [bool]$host64
         added = (New-Object System.Collections.ArrayList)
         replaced = (New-Object System.Collections.ArrayList)
@@ -1067,7 +1099,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     if (-not $reshadeRoute -and -not $DryRun) { Fail "No ReShade injection route available. Install ReShade manually, then retry." }
 
     if ($DryRun) {
-        Write-Step "[dry] provider=$Provider passes=$Passes work=$WorkPercent% style=$StyleIndex mvProvider=$MVProvider feeder=$useFeeder route=$reshadeRoute host64=$host64"
+        Write-Step "[dry] provider=$Provider passes=$Passes work=$WorkPercent% style=$StyleIndex mvProvider=$MVProvider feeder=$useFeeder route=$reshadeRoute host64=$host64 mfgAddon=$MfgAddon"
         return
     }
 
@@ -1082,6 +1114,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
     Install-OneFile 'runtime\nvngx_dlss.dll'   ($hostRel + 'nvngx_dlss.dll')
     Install-OneFile 'runtime\nvngx_dlssnr.dll' ($hostRel + 'nvngx_dlssnr.dll')
+    if ($MfgAddon) { Install-OneFile 'mfgunlock\renodx-mfgunlock.addon64' 'renodx-mfgunlock.addon64' }
 
     if ($useFeeder) {
         if ($host64) { Install-OneFile 'addons\dlss5-feed.addon32' 'dlss5-feed.addon32' }
@@ -1161,6 +1194,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
             'PresetPath'        = '.\ReShadePreset.ini'
             'PreprocessorDefinitions' = "DLSS5_MV_PROVIDER=$MVProvider"
         }
+        'INPUT'   = @{ 'KeyOverlay' = '33,0,0,0' }
     }
     if ($api -eq 'vulkan') {
         # The Vulkan layer is registered machine-wide (ProgramData) or per-user.
@@ -1195,7 +1229,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     if ($host64) {
         $hostIni = Join-Path $exeDir 'host64\ReShade.ini'
         Add-Replace $hostIni
-        $hsections = @{ 'ADDON' = @{ 'AddonPath' = '.\' } }
+        $hsections = @{ 'ADDON' = @{ 'AddonPath' = '.\' }; 'INPUT' = @{ 'KeyOverlay' = '33,0,0,0' } }
         if ($hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
         if ($Provider -eq 'renodx') {
             $hsections['RenoDX.DLSS5'] = @{
@@ -1255,6 +1289,7 @@ if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPa
         Write-Step "Provider : $Provider"
         if ($Provider -eq 'chicken') { Write-Step "Passes   : $Passes (deep-fried-chicken.cfg layers)" }
         Write-Step "Feeder   : $([bool]$useFeeder)"
+        if ($MfgAddon) { Write-Step "MFGUnlock: ReShade addon renodx-mfgunlock.addon64 (open ReShade > Add-ons > MFG Unlock)" }
         $archNote = ''
         if ($host64) { $archNote = '  (neural stack in host64\)' }
         Write-Step ("Arch     : {0}-bit{1}" -f $exe.Bitness, $archNote)
@@ -1272,6 +1307,7 @@ if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPa
         provider = $Provider
         passes = $Passes
         feeder = [bool]$useFeeder
+        mfgAddon = [bool]$MfgAddon
         bitness = $exe.Bitness
         host64 = [bool]$host64
         added = @($manifest.added)
@@ -1356,6 +1392,16 @@ $manifest = Get-OldManifest $GameDir
                 $hini = Get-Content -LiteralPath $hostIniP -Raw
                 $checks += [pscustomobject]@{ Item = 'host64\ReShade.ini LoadFromDllMain'; Ok = ($hini -match 'LoadFromDllMain=.+addon64'); Note = ($hini -match 'AddonPath') }
             }
+        }
+    }
+    # MFG Unlock addon - must still sit in the addon path
+    $manMfgAddon = Get-ManifestProp $manifest 'mfgAddon'
+    if ($manMfgAddon) {
+        $pa = Join-Path $exeDir 'renodx-mfgunlock.addon64'
+        if (Test-Path -LiteralPath $pa) {
+            $checks += [pscustomobject]@{ Item = 'MFG Unlock addon'; Ok = $true; Note = 'v' + (Get-FileProductVersion $pa) }
+        } else {
+            $checks += [pscustomobject]@{ Item = 'MFG Unlock addon'; Ok = $false; Note = 'MISSING' }
         }
     }
 
@@ -1620,7 +1666,8 @@ if ($Install) {
     $r = Install-Stack -GameDir $gameDir -ApiOverride $apiArg -Provider $Provider -Passes $Passes `
         -WorkPercent $WorkResolution -StyleIndex $styleIndex -NrxPreset $Preset `
         -NrxIntensity $Intensity -SymMv $MVProvider -SymCleanFry $CleanFry `
-        -SymTexBoost $TextureBoost -SymUplift $NeuralUplift -FeederMode $Feeder -ExeName $Exe
+        -SymTexBoost $TextureBoost -SymUplift $NeuralUplift -FeederMode $Feeder -ExeName $Exe `
+        -MfgAddon $MFGAddon
     if ($Json -and $r) { $r | ConvertTo-Json -Compress -Depth 6 }
     exit 0
 }
@@ -1642,7 +1689,7 @@ if ($Uninstall) {
 Write-Host "DLSS 5 Swapper"
 Write-Host "  .\DLSS5-Swapper.ps1 -BuildKit"
 Write-Host "  .\DLSS5-Swapper.ps1 -Scan -GamePath <folder>"
-Write-Host "  .\DLSS5-Swapper.ps1 -Install -GamePath <folder> [-Provider chicken|renodx] [-Passes N] [-Api d3d12|vulkan|...]"
+Write-Host "  .\DLSS5-Swapper.ps1 -Install -GamePath <folder> [-Provider chicken|renodx] [-Passes N] [-Api d3d12|vulkan|...] [-MFGAddon]"
 Write-Host "  .\DLSS5-Swapper.ps1 -Verify -GamePath <folder>"
 Write-Host "  .\DLSS5-Swapper.ps1 -Uninstall -GamePath <folder>"
 Write-Host "  .\DLSS5-Swapper.ps1 -Help"

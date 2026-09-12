@@ -231,6 +231,7 @@ function gameCard(g) {
   if (g.bit) chips.appendChild(chip('dim', g.bit + '-bit'));
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
   if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
+  if (inst && inst.mfgAddon) chips.appendChild(chip('purple', 'MFG addon'));
 
   const btns = document.createElement('div');
   btns.className = 'gc-btns';
@@ -478,6 +479,7 @@ function readInstallOptions() {
     uplift: $('#o-uplift').checked,
     force: $('#o-force').checked,
     launch: $('#o-launch').checked,
+    mfgAddon: $('#o-mfgaddon').checked,
     exe: exe
   };
 }
@@ -490,7 +492,10 @@ function doInstall() {
   const bit = opt0 && opt0.dataset ? Number(opt0.dataset.bit || 0) : Number(g.bit || 0);
   const exeName = (opt0 && opt0.value) || g.name;
   if (bit === 32) {
-    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. DLSS 5\u2019s neural stack will run inside a 64-bit <b>host helper</b> (<code>host64\\</code>) that the swapper installs next to the game, and the feeder hooks the 32-bit process itself.<br><br>Notes: the swapper deploys a bundled <b>32-bit ReShade</b> hook (<code>dxgi.dll</code>) next to the exe automatically, and DirectX 8/9 games are wrapped with <b>dgVoodoo2</b> (D3D8/9 -> D3D11). Both are DLL hooks, so skip this if the game runs anticheat. Continue?</div>', [
+    const mfgNote = $('#o-mfgaddon').checked
+      ? '<br><br><b>Note:</b> the MFG Unlock addon is an <b>x64-only</b> ReShade addon \u2014 it will not load in a 32-bit process. Uncheck it if you selected it.'
+      : '';
+    showModal('32-bit game', '<div class="m-intro"><b>' + esc(exeName) + '</b> is a <b>32-bit</b> executable. DLSS 5\u2019s neural stack will run inside a 64-bit <b>host helper</b> (<code>host64\\</code>) that the swapper installs next to the game, and the feeder hooks the 32-bit process itself.<br><br>Notes: the swapper deploys a bundled <b>32-bit ReShade</b> hook (<code>dxgi.dll</code>) next to the exe automatically, and DirectX 8/9 games are wrapped with <b>dgVoodoo2</b> (D3D8/9 -> D3D11). Both are DLL hooks, so skip this if the game runs anticheat. Continue?' + mfgNote + '</div>', [
       { label: 'Decline', cls: 'ghost', action: closeModal },
       { label: 'Install (host helper)', cls: 'danger', action: () => { closeModal(); runInstall(g, true); } }
     ]);
@@ -508,6 +513,7 @@ async function runInstall(g, forced) {
     const bits = [r.provider];
     if (r.passes) bits.push(r.passes + ' pass' + (r.passes === 1 ? '' : 'es'));
     if (r.api) bits.push(r.api);
+    if (r.mfgAddon) bits.push('MFG addon');
     const msg = 'Installed into ' + r.exe + '  \u00B7  ' + bits.join('  \u00B7  ');
     toast('OK  \u2014  ' + msg);
     logLine('install OK: ' + msg, 'ok');
@@ -614,6 +620,7 @@ async function loadBackups() {
     if (b.size) chips.appendChild(chip('dim', fmtSize(b.size)));
     if (b.date) chips.appendChild(chip('dim', 'installed ' + b.date));
     if (b.feeder === false) chips.appendChild(chip('blue', 'native DLSS'));
+    if (b.mfgAddon) chips.appendChild(chip('purple', 'MFG addon'));
     const btns = document.createElement('div');
     btns.className = 'gc-btns';
     btns.appendChild(mkBtn('ghost', 'Verify', () => verifyGame({ name: b.dir.split(/[\\/]/).pop(), dir: b.dir })));

@@ -8,6 +8,7 @@ Everything needed to run the **DLSS 5 Swapper** backend and its Electron UI.
 |---|---|---|
 | NVIDIA GPU with **Tensor cores** | DLSS 5 Neural Rendering runs on the `nvngx_dlssnr` model, which needs Tensor Cores | required |
 | GeForce RTX 30 / 40 / 50 series | The community builds used here are tested on RTX 30/40/50 | recommended |
+| RTX 40 series for `-MFGAddon` | The MFGUnlock ReShade addon unlocks 3x/4x/6x MFG on RTX 40 with the temporal midpoint fix | only for `-MFGAddon` |
 | ~300 MB free disk per game | `nvngx_dlss.dll` (~59 MB) + `nvngx_dlssnr.dll` (~158 MB) + shaders are copied next to every game exe | required |
 | Enough VRAM | Neural Rendering evaluates at (or above) your render resolution on top of the game itself | recommended |
 
@@ -72,6 +73,9 @@ sources configured in `sources.json`:
 - **dgVoodoo2** for 32-bit DirectX 8/9 games (`dgvoodoo\D3D8.dll`,
   `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe`) - antivirus products flag it
   as a false positive, so it is built locally, not committed.
+- **MFG Unlock addon** (`mfgunlock\renodx-mfgunlock.addon64`) - the `-MFGAddon`
+  ReShade addon from the 0.9 release (github.com/mavismmg/MFGAdaUnlock-RenoDx);
+  set `"mfgunlock"` in `sources.json` to rebuild from a newer release.
 
 ## Verification
 
@@ -92,3 +96,6 @@ for 32-bit games.
   See README *32-bit / host-helper path: known issues (future fix)*.
 - **RTX on / alternatives**: DLSS 5 replaces nothing; the game must meet the
   NVIDIA runtime and driver conditions above or the neural pass stays inert.
+- **MFG Unlock addon (`-MFGAddon`)**: RTX 40 only, x64-only ReShade addon - do
+  not enable for 32-bit games. See README *Notes & limitations* for the
+  paired-run-time guidance when RenoDX DLSS5 is also installed.
