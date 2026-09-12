@@ -146,6 +146,7 @@ body {
 #pages { flex: 1; min-height: 0; padding: 0 26px 24px; overflow: hidden; }
 .page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 .page.hidden { display: none; }
+#page-lib, #page-backups { overflow-y: auto; }
 
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .status { color: var(--muted); font-size: 12px; margin-left: 8px; }
@@ -173,7 +174,7 @@ body {
 .btn.icon { padding: 6px 10px; }
 
 /* ---------- cards ---------- */
-.grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); gap: 18px; align-content: start; padding-bottom: 14px; }
+.grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); gap: 18px; align-content: start; padding-bottom: 14px; }
 
 .card {
   position: relative;
