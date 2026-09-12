@@ -1091,10 +1091,9 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     }
     if ($earlyLoadAddon) { $sections['ADDON']['LoadFromDllMain'] = $earlyLoadAddon }
     $styleNum = switch ($StyleIndex) { 1 { 1 } 2 { 2 } default { 0 } }
-    $streamlineHost = Test-Path -LiteralPath (Join-Path $exeDir 'sl.interposer.dll')
     if ($Provider -eq 'renodx' -and -not $host64) {
         $sections['RenoDX.DLSS5'] = @{
-            'EnableHooks'        = if ($streamlineHost) { '1' } else { '2' }
+            'EnableHooks'        = '2'
             'NeuralUplift'       = ([int]$SymUplift.IsPresent)
             'NRAutoMask'         = '0'
             'NRDiffuseWhiteNits' = '203'
@@ -1119,7 +1118,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         if ($hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
         if ($Provider -eq 'renodx') {
             $hsections['RenoDX.DLSS5'] = @{
-                'EnableHooks'        = if ($streamlineHost) { '1' } else { '2' }
+                'EnableHooks'        = '2'
                 'NeuralUplift'       = ([int]$SymUplift.IsPresent)
                 'NRAutoMask'         = '0'
                 'NRDiffuseWhiteNits' = '203'
