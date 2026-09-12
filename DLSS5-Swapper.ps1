@@ -753,6 +753,31 @@ function Get-OldManifest { param($GameDir)
     return $null
 }
 
+# Read a manifest field tolerantly. Older tool generations stored identity
+# fields ('exe','api','apiLabel','bit') under 'game' and never wrote
+# 'provider'/'host64'/'bit'/'feeder', so plain property access throws under
+# strict mode. Returns $null when the field is absent.
+function Get-ManifestProp {
+    param([object]$Manifest, [string]$Name)
+    if ($null -eq $Manifest) { return $null }
+    $p = $Manifest.PSObject.Properties[$Name]
+    if ($p) { return $p.Value }
+    if ($Name -eq 'bit') {
+        $b = $Manifest.PSObject.Properties['bitness']
+        if ($b) { return $b.Value }
+    }
+    $g = $Manifest.PSObject.Properties['game']
+    if ($g -and $g.Value) {
+        $gp = $g.Value.PSObject.Properties[$Name]
+        if ($gp) { return $gp.Value }
+        if ($Name -eq 'bit') {
+            $gb = $g.Value.PSObject.Properties['bitness']
+            if ($gb) { return $gb.Value }
+        }
+    }
+    return $null
+}
+
 # ---------------------------------------------------------------------------
 # install
 # ---------------------------------------------------------------------------
@@ -859,8 +884,10 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
             if (-not $Force) { Fail "A DLSS5 backup already exists in $GameDir (use -Uninstall first, or -Force to start over)." }
             $old = Get-OldManifest $GameDir
             if ($old) {
-                Write-Step "Reinstall (-Force): removing $($old.added.Count) previously-added files"
-                foreach ($a in $old.added) {
+                $oldAdded = @(Get-ManifestProp $old 'added')
+                Write-Step "Reinstall (-Force): removing $($oldAdded.Count) previously-added files"
+                foreach ($a in $oldAdded) {
+                    if (-not $a) { continue }
                     $p = Join-Path $GameDir $a
                     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
                 }
@@ -1210,10 +1237,11 @@ $manifest = Get-OldManifest $GameDir
             $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
         }
     }
-    $manBit = if ($manifest -and $manifest.PSObject.Properties['bit']) { $manifest.bit } else { $null }
-    if ($manifest -and ($manifest.api -eq 'd3d8' -or $manifest.api -eq 'd3d9') -and $manBit -ne 64) {
+    $manBit = Get-ManifestProp $manifest 'bit'
+    $manApi = Get-ManifestProp $manifest 'api'
+    if ($manifest -and ($manApi -eq 'd3d8' -or $manApi -eq 'd3d9') -and $manBit -ne 64) {
         $dgChecks = @('D3D9.dll','dgVoodoo.conf')
-        if ($manifest.api -eq 'd3d8') { $dgChecks = @('D3D8.dll','D3D9.dll','dgVoodoo.conf') }
+        if ($manApi -eq 'd3d8') { $dgChecks = @('D3D8.dll','D3D9.dll','dgVoodoo.conf') }
         foreach ($n in $dgChecks) {
             $p = Join-Path $exeDir $n
             $checks += [pscustomobject]@{ Item = $n; Ok = (Test-Path -LiteralPath $p); Note = if (Test-Path -LiteralPath $p) { 'present' } else { 'MISSING' } }
@@ -1277,12 +1305,12 @@ if (-not $Json) {
         }
     }
 if ($manifest) {
-        # manifests from older tool generations miss fields (e.g. 'bit') - read them defensively
         $mvals = foreach ($p in @('provider','api','bit','host64','feeder')) {
-            $prop = $manifest.PSObject.Properties[$p]
-            "$p=" + $(if ($prop) { $prop.Value } else { '?' })
+            $v = Get-ManifestProp $manifest $p
+            "$p=" + $(if ($null -ne $v -and $v -ne '') { $v } else { '?' })
         }
-        $mCount = if ($manifest.PSObject.Properties['added']) { $manifest.added.Count } else { 0 }
+        $mAdded = Get-ManifestProp $manifest 'added'
+        $mCount = if ($mAdded) { @($mAdded).Count } else { 0 }
         Write-Step ("Manifest: " + (($mvals + "files=$mCount") -join ' '))
     }
 
@@ -1292,7 +1320,7 @@ if ($manifest) {
         exe = $exe.Name
         api = $exe.Label
         checks = @($checks)
-        provider = if ($manifest) { $manifest.provider } else { $null }
+        provider = Get-ManifestProp $manifest 'provider'
         installed = [bool]$manifest
     }
 }
@@ -1306,23 +1334,26 @@ function Invoke-UninstallStack {
     if (-not $manifest) { Fail "No DLSS5 manifest found in $GameDir (nothing to uninstall)." }
     $backDir = Join-Path $GameDir '_DLSS5_Backup'
     Write-Step "Removing DLSS5 files and restoring originals..."
-    foreach ($a in $manifest.added) {
+$addedArr = @(Get-ManifestProp $manifest 'added')
+    $replArr = @(Get-ManifestProp $manifest 'replaced')
+    foreach ($a in $addedArr) {
+        if (-not $a) { continue }
         $p = Join-Path $GameDir $a
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
-    foreach ($r in $manifest.replaced) {
+    foreach ($r in $replArr) {
         $bak = Join-Path $backDir $r.backup
         $dst = Join-Path $GameDir $r.file
         New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
         if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $dst -Force }
     }
 Remove-Item -LiteralPath $backDir -Recurse -Force
-    if ($manifest.host64) {
+    if (Get-ManifestProp $manifest 'host64') {
         $host64Dir = Join-Path $GameDir 'host64'
         if (Test-Path -LiteralPath $host64Dir) { Remove-Item -LiteralPath $host64Dir -Recurse -Force }
     }
     Write-Ok "Uninstalled. Original files restored."
-    return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($manifest.added); restored = @($manifest.replaced); host64 = [bool]$manifest.host64 }
+    return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($addedArr); restored = @($replArr); host64 = [bool](Get-ManifestProp $manifest 'host64') }
 }
 
 # ---------------------------------------------------------------------------
