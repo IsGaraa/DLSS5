@@ -143,8 +143,9 @@ function Get-AsciiImports {
         if ($br.ReadUInt32() -ne 0x00004550) { return @() }        # 'PE\0\0'
         $null = $br.ReadUInt16()                                    # Machine
         $numSections = $br.ReadUInt16()
-        $null = $br.ReadUInt32(); $null = $br.ReadUInt32(); $null = $br.ReadUInt32(); $null = $br.ReadUInt32()
-        $optSize = $br.ReadUInt16()
+        $null = $br.ReadUInt32(); $null = $br.ReadUInt32(); $null = $br.ReadUInt32()
+        $optSize = $br.ReadUInt16()                                 #SizeOfOptionalHeader
+        $null = $br.ReadUInt16()                                    #Characteristics
         $optOff = $peOff + 24
         $fs.Position = $optOff
         $magic = $br.ReadUInt16()
@@ -908,13 +909,19 @@ $api = $ApiOverride
         # proxy. A local dxgi.dll would load a second ReShade into the process and
         # the two instances fight ("Another ReShade instance was already loaded...");
         # the D3D12/Vulkan journal also shows RDR2 runs with <API>kSettingAPI_Vulkan</API>.
-        $importsVulkan = Find-BinaryMarkers -Path $exe.Path -Markers @('vkCreateInstance') -Any $true
-        if (($api -eq 'dxgi') -and $importsVulkan) {
-            $hasVkLayer = (Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' 'ReShade64.dll')) -or
-                          (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.dlss5vulkanlayer\ReShade64.dll'))
-            if ($hasVkLayer) {
-                Write-Step "Detected a Vulkan-capable hybrid (Dxgi + vulkan-1.dll) and a registered ReShade Vulkan layer; routing through the Vulkan layer for $($exe.Name)."
-                $api = 'vulkan'
+        #
+        # Only a REAL import (import or delay-load table) triggers the flip. A bare
+        # vkCreateInstance string elsewhere in the file is not enough - e.g.
+        # BeamNG.drive.x64.exe embeds CEF/ANGLE Vulkan blobs but presents via D3D12.
+        if ($api -eq 'dxgi') {
+            $importsVulkan = (Get-AsciiImports -Path $exe.Path) -contains 'vulkan-1.dll'
+            if ($importsVulkan) {
+                $hasVkLayer = (Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' 'ReShade64.dll')) -or
+                              (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.dlss5vulkanlayer\ReShade64.dll'))
+                if ($hasVkLayer) {
+                    Write-Step "Detected a Vulkan-capable hybrid (Dxgi + vulkan-1.dll import) and a registered ReShade Vulkan layer; routing through the Vulkan layer for $($exe.Name)."
+                    $api = 'vulkan'
+                }
             }
         }
     }
