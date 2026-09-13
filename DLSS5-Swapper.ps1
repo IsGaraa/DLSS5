@@ -272,15 +272,19 @@ function Get-FileProductVersion {
 # rendering API detection (mirrors DLSS5-Swapper)
 # ---------------------------------------------------------------------------
 function Get-ApiFromNames {
-    param([string[]]$Imports)
+    param([string[]]$Imports, [int]$Bitness = 0)
     $has = { param($n) $Imports -contains $n }
     if (& $has 'd3d12.dll')   { return @{ api = 'dxgi';    label = 'DirectX 12'; via = 'imports' } }
     if (& $has 'd3d11.dll')   { return @{ api = 'dxgi';    label = 'DirectX 11'; via = 'imports' } }
     if ((& $has 'd3d10.dll') -or (& $has 'd3d10_1.dll')) { return @{ api = 'd3d10'; label = 'DirectX 10'; via = 'imports' } }
     if (& $has 'dxgi.dll')    { return @{ api = 'dxgi';    label = 'DirectX (DXGI)'; via = 'imports' } }
     if (& $has 'vulkan-1.dll'){ return @{ api = 'vulkan';  label = 'Vulkan'; via = 'imports' } }
-    if (& $has 'd3d9.dll')    { return @{ api = 'd3d9';    label = 'DirectX 9'; via = 'imports' } }
-    if (& $has 'd3d8.dll')    { return @{ api = 'd3d8';    label = 'DirectX 8'; via = 'imports' } }
+    # D3D9/D3D8 are 32-bit-only APIs. A 64-bit exe that imports them (e.g. RDR2
+    # statically links d3d9.dll for its legacy pipeline) is never a D3D9/8 renderer.
+    if ($Bitness -ne 64) {
+        if (& $has 'd3d9.dll')    { return @{ api = 'd3d9';    label = 'DirectX 9'; via = 'imports' } }
+        if (& $has 'd3d8.dll')    { return @{ api = 'd3d8';    label = 'DirectX 8'; via = 'imports' } }
+    }
     if (& $has 'opengl32.dll'){ return @{ api = 'opengl';  label = 'OpenGL'; via = 'imports' } }
     return $null
 }
@@ -315,6 +319,27 @@ $TestMarker = {
     return $null
 }
 
+function Get-ApiFromDynamic {
+    # 64-bit engines that load their renderer at runtime (e.g. RDR2) statically
+    # bind no modern graphics DLL - only a legacy d3d9.dll - while carrying both
+    # D3D12 and Vulkan entry points. BeamNG-like games are immune because they
+    # statically import d3d12/d3d11/dxgi, so they never reach this path. When the
+    # exe ships D3D12 + vkCreateInstance markers and a ReShade Vulkan layer is
+    # registered, the game's actual presenter is Vulkan (RDR2 journal:
+    # kSettingAPI_Vulkan).
+    param([string]$Path, [string[]]$Imports, [int]$Bitness = 0)
+    if ($Bitness -ne 64) { return $null }
+    if (($Imports -contains 'd3d11.dll') -or ($Imports -contains 'd3d12.dll') -or
+        ($Imports -contains 'dxgi.dll')  -or ($Imports -contains 'vulkan-1.dll')) { return $null }
+    $hasD3D = Find-BinaryMarkers -Path $Path -Markers @('D3D12CreateDevice') -Any $true
+    $hasVk  = Find-BinaryMarkers -Path $Path -Markers @('vkCreateInstance') -Any $true
+    if (-not ($hasD3D -and $hasVk)) { return $null }
+    $hasLayer = (Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' 'ReShade64.dll')) -or
+                (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.dlss5vulkanlayer\ReShade64.dll'))
+    if (-not $hasLayer) { return $null }
+    return @{ api = 'vulkan'; label = 'Vulkan'; via = 'dynamic' }
+}
+
 function Test-VulkanWrapper {
     # a Direct3D DLL sitting beside the exe that is really DXVK / vkd3d
     param([string]$Dir, [string]$Api, [int]$Bitness)
@@ -339,7 +364,9 @@ function Test-VulkanWrapper {
 function Get-DetectedApi {
     param([string]$ExePath, [int]$Bitness = 0)
     $imports = Get-AsciiImports -Path $ExePath
-    $d = Get-ApiFromNames -Imports $imports
+    $d = Get-ApiFromNames -Imports $imports -Bitness $Bitness
+    if ($d) { return $d }
+    $d = Get-ApiFromDynamic -Path $ExePath -Imports $imports -Bitness $Bitness
     if ($d) { return $d }
     $d = Get-ApiFromMarkers -Path $ExePath -Bitness $Bitness
     if ($d) { return $d }
