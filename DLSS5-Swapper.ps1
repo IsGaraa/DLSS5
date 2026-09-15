@@ -1,4 +1,4 @@
-﻿#requires -Version 5.1
+#requires -Version 5.1
 <#
   DLSS 5 Swapper - a self-contained installer for the DLSS 5 Neural Rendering
   stack (DLSS5-Feeder + a neural provider) into non-DLSS games, modelled on the
@@ -36,7 +36,15 @@
     -CleanFry                                            enable multi-pass cleanup
     -TextureBoost                                        enable experimental 8K path
     -NeuralUplift                                        renodx NeuralUplift
--Feeder auto|forced|off                              DLSS5-Feeder transport
+    -RenoHooks auto|ngx|streamline                       renodx addon hook mode
+                                                          (auto=remembered or NGX-only,
+                                                          streamline=patch Streamline
+                                                          sl.interposer/sl.common for
+                                                          Streamline-routed titles)
+    -FixHooks                                            rewrite the addon's EnableHooks
+                                                          per -RenoHooks (auto-detects
+                                                          from ReShade.log evidence)
+    -Feeder auto|forced|off                              DLSS5-Feeder transport
     -MFGAddon                                            install the MFG Unlock ReShade
                                                           addon (mavismmg/MFGAdaUnlock-
                                                           RenoDx) alongside the stack for
@@ -74,15 +82,18 @@ param(
     [int]$MVProvider = 3,
     [switch]$CleanFry,
     [switch]$TextureBoost,
-    [switch]$NeuralUplift,
+[switch]$NeuralUplift,
+    [ValidateSet('auto','ngx','streamline')]
+    [string]$RenoHooks = 'auto',
     [ValidateSet('auto','forced','off')]
     [string]$Feeder = 'auto',
     [switch]$MFGAddon,
     [string]$KitPath = '',
     [string]$ExeFilter = '',
-[switch]$Force,
+    [switch]$Force,
     [switch]$DryRun,
     [switch]$Launch,
+    [switch]$FixHooks,
     [switch]$Discover,
     [string]$ScanRoot = '',
     [int]$Depth = 6,
@@ -398,6 +409,31 @@ function Get-ApiFromEngine {
     return [pscustomobject]@{ Item = 'UnityPlayer.dll'; Api = 'dxgi'; Label = 'Unity (DirectX 11/12)'; Via = 'engine' }
 }
 
+function Get-ApiFromSiblings {
+    # games whose .exe is a launcher/stub (zero graphics imports) keep the real
+    # renderer in a sibling engine DLL (e.g. Watch Dogs 2: WatchDogs2.exe is a
+    # stub; Disrupt_64.dll imports d3d11.dll). As the very last fallback, scan the
+    # import tables of the largest DLLs beside the exe and report the first hit.
+    param([string]$Dir, [int]$Bitness)
+    try { $dlls = @(Get-ChildItem -LiteralPath $Dir -Filter '*.dll' -File -ErrorAction SilentlyContinue) } catch { $dlls = @() }
+    if ($dlls.Count -eq 0) { return $null }
+    $blocked = @('dxgi.dll','d3d12.dll','d3d11.dll','d3d10.dll','d3d10_1.dll','d3d9.dll','d3d8.dll','opengl32.dll','vulkan-1.dll','dinput8.dll','nvngx_dlss.dll','nvngx_dlssnr.dll','nvngx_dlssg.dll','nvngx_dlssd.dll','sl.interposer.dll','sl.common.dll')
+    $cands = $dlls | Where-Object {
+        $_.Length -ge 262144 -and
+        $blocked -notcontains $_.Name.ToLower() -and
+        $_.Name -notmatch '^(sl\.|nvngx|sl\.)' -and
+        -not (Get-IsReShadeProxy $_.FullName)
+    } | Sort-Object Length -Descending | Select-Object -First 12
+    foreach ($d in $cands) {
+        if ((Get-PeBitness $d.FullName) -ne $Bitness) { continue }
+        $imports = Get-AsciiImports -Path $d.FullName
+        if (-not $imports -or $imports.Count -eq 0) { continue }
+        $r = Get-ApiFromNames -Imports $imports -Bitness $Bitness
+        if ($r) { $r.via = 'sibling:' + $d.Name; return $r }
+    }
+    return $null
+}
+
 function Get-ReShadeInfo {
     param([string]$Dir)
     $hooks = @('dxgi.dll','d3d12.dll','d3d11.dll','d3d9.dll','opengl32.dll','dinput8.dll')
@@ -431,6 +467,9 @@ function Get-GameScan {
 $detected = Get-DetectedApi $it.FullName $bitness
             if (-not $detected) {
                 $detected = Get-ApiFromEngine -Dir $cur -Bitness $bitness
+            }
+            if (-not $detected) {
+                $detected = Get-ApiFromSiblings -Dir $cur -Bitness $bitness
             }
             if (-not $detected) {
                 $undetected.Add([pscustomobject]@{ Path=$it.FullName; Name=$it.Name; Size=$it.Length; Depth=$depth; Bitness=$bitness; Api=$null; Label='undetected'; Via='undetected' })
@@ -969,6 +1008,22 @@ if ($api -eq 'opengl') {
         Write-Warn "OpenGL needs an opengl32.dll ReShade proxy; none is bundled."
         if (-not $Force) { Fail "Aborting (use -Force to copy files anyway)." }
     }
+    if ($Provider -eq 'renodx' -and $api -eq 'vulkan') {
+        # RenoDX DLSS5 Generic detours the D3D12 NGX evaluate. On Vulkan the
+        # D3D12 device that feeds it is manufactured in-process by the DLSS5-
+        # Feeder addon (the consumer registers when the Feeder is present).
+        # Without the Feeder, the addon has nothing to hook ('No add-on was
+        # registered ... Unloading again' on No Man's Sky). This is exactly the
+        # supported config the DLSS 5 Swapper ships on Vulkan (Feeder + RenoDX).
+        $feedAddon64 = Join-Path $Script:Kit 'addons\dlss5-feed.addon64'
+        if (-not (Test-Path -LiteralPath $feedAddon64)) {
+            if (-not $Force) {
+                Fail "renodx on a Vulkan game needs the DLSS5-Feeder transport, but kit\addons\dlss5-feed.addon64 is missing. Rebuild the kit (-BuildKit), or use -Provider chicken, or -Force to copy files anyway."
+            }
+        } else {
+            Write-Step "RenoDX on Vulkan: DLSS5-Feeder will be enabled (provides the D3D12 context the consumer needs to register)."
+        }
+    }
 # 32-bit games run the neural stack in a 64-bit host helper (feeder host64)
     $is32Bit = ($exe.Bitness -ne 64)
     $host64 = $false
@@ -996,16 +1051,26 @@ if ($api -eq 'opengl') {
         }
     }
 
-    # Feeder decision
+    # Feeder decision. The DLSS5-Feeder addon manufactures the DLSS 5 NGX
+    # contract and provides the consumer's private D3D12 device. On Vulkan,
+    # ReShade runs through the machine/user-wide layer with no D3D12 context of
+    # its own; the Feeder is what lets the consumer (renodx or chicken) register
+    # at all in a Vulkan process. This matches the DLSS 5 Swapper app, which
+    # always routes Vulkan through the Feeder regardless of native DLSS.
+    $vulkanApi = ($api -eq 'vulkan')
+    $native = (Test-Path -LiteralPath (Join-Path $exeDir 'sl.interposer.dll')) -or
+              (Test-Path -LiteralPath (Join-Path $exeDir 'sl.dlss.dll'))
     $useFeeder = $false
-    if ($FeederMode -eq 'forced') { $useFeeder = $true }
-    elseif ($FeederMode -eq 'off') { $useFeeder = $false }
-    else {
-$native = (Test-Path -LiteralPath (Join-Path $exeDir 'sl.interposer.dll')) -or
-                  (Test-Path -LiteralPath (Join-Path $exeDir 'sl.dlss.dll'))
-        $useFeeder = -not $native
+    if ($vulkanApi) {
+        if ($FeederMode -eq 'off') {
+            Write-Warn "-Feeder off ignored: on a Vulkan game the Feeder transport is required (without it the neural addon cannot register in the Vulkan process - see README 9.5)."
+        }
+        $useFeeder = $true
     }
-if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
+    elseif ($FeederMode -eq 'forced') { $useFeeder = $true }
+    elseif ($FeederMode -eq 'off') { $useFeeder = $false }
+    else { $useFeeder = -not $native }
+    if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder $(if ($vulkanApi) { '(mandatory on Vulkan - provides the consumer D3D12 context)' } else { '(non-DLSS game)' })" }
     else { Write-Step "Transport: game native DLSS (Feeder skipped)" }
 
     # MFG Unlock addon (optional): ReShade addon build of the same in-memory approach
@@ -1041,6 +1106,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         }
         New-Item -ItemType Directory -Path $backDir -Force | Out-Null
     }
+    $renoHookMode = if ($RenoHooks -eq 'streamline') { '1' } else { '2' }
     $manifest = [ordered]@{
         tool = 'DLSS5-Swapper'
         date = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
@@ -1050,6 +1116,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         api  = $api
         apiLabel = $label
         provider = $Provider
+        hookMode = $(if ($Provider -eq 'renodx') { $renoHookMode } else { $null })
         feeder = [bool]$useFeeder
         mfgAddon = [bool]$MfgAddon
         host64 = [bool]$host64
@@ -1087,10 +1154,20 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         elseif ($hasDg -and ($reshade.Installed -or (Test-Path -LiteralPath (Join-Path $Script:Kit 'reshade\dxgi-x86.dll')))) { $reshadeRoute = $true }
     }
     if ($api -eq 'vulkan') {
+        # Vulkan does not load a proxy DLL from the executable directory. ReShade
+        # runs as a machine-wide (ProgramData) or per-user (%USERPROFILE%)
+        # implicit Vulkan layer registered in the HKCU registry. The per-user
+        # layer is reference-counted (installs.json) so restoring one game does
+        # not break another - the same contract as the DLSS 5 Swapper's
+        # vulkan-layer.js.
         $vkHub = if ($is32Bit) { 'ReShade32' } else { 'ReShade64' }
         $layer = Test-Path -LiteralPath (Join-Path 'C:\ProgramData\ReShade' ($vkHub + '.dll'))
-        if (-not $layer) {
+        if ($layer) {
+            $reshadeRoute = $true
+        } else {
             $user = Join-Path $env:USERPROFILE '.dlss5vulkanlayer'
+            $userJson = Join-Path $user ($vkHub + '.json')
+            $uInstalls = Join-Path $user 'installs.json'
             if (-not (Test-Path -LiteralPath (Join-Path $user ($vkHub + '.dll')))) {
                 if ($DryRun) { Write-Step "[dry] would install user Vulkan layer ($vkHub)" }
                 else {
@@ -1100,12 +1177,24 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
                             Copy-Item -LiteralPath (Join-Path $Script:Kit "reshade-vulkan\$n") -Destination (Join-Path $user $n) -Force
                         }
                         New-Item -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Force | Out-Null
-                        New-ItemProperty -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Name (Join-Path $user ($vkHub + '.json')) -Value 0 -PropertyType DWord -Force | Out-Null
+                        New-ItemProperty -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Name $userJson -Value 0 -PropertyType DWord -Force | Out-Null
                     }
                 }
-                $reshadeRoute = $true
-            } else { $reshadeRoute = $true }
-        } else { $reshadeRoute = $true }
+            }
+            $reshadeRoute = $true
+            if (-not $DryRun) {
+                $gameKey = $GameDir.TrimEnd('\')
+                $games = @()
+                if (Test-Path -LiteralPath $uInstalls) {
+                    try {
+                        $data = Get-Content -LiteralPath $uInstalls -Raw | ConvertFrom-Json
+                        $games = @($data.games | Where-Object { $_ -and ($_.TrimEnd('\') -ne $gameKey) })
+                    } catch { $games = @() }
+                }
+                if (@($games) -notcontains $gameKey) { $games += $gameKey }
+                [System.IO.File]::WriteAllText($uInstalls, (@{ version = 1; games = $games } | ConvertTo-Json), (New-Object System.Text.UTF8Encoding($false)))
+            }
+        }
     }
     if ($api -eq 'dxgi') {
         $needsProxy = -not $reshade.Installed
@@ -1242,7 +1331,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
     $styleNum = switch ($StyleIndex) { 1 { 1 } 2 { 2 } default { 0 } }
     if ($Provider -eq 'renodx' -and -not $host64) {
         $sections['RenoDX.DLSS5'] = @{
-            'EnableHooks'        = '2'
+            'EnableHooks'        = "$renoHookMode"
             'NeuralUplift'       = ([int]$SymUplift.IsPresent)
             'NRAutoMask'         = '0'
             'NRDiffuseWhiteNits' = '203'
@@ -1267,7 +1356,7 @@ if ($useFeeder) { Write-Step "Transport: DLSS5-Feeder (non-DLSS game)" }
         if ($hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
         if ($Provider -eq 'renodx') {
             $hsections['RenoDX.DLSS5'] = @{
-                'EnableHooks'        = '2'
+                'EnableHooks'        = "$renoHookMode"
                 'NeuralUplift'       = ([int]$SymUplift.IsPresent)
                 'NRAutoMask'         = '0'
                 'NRDiffuseWhiteNits' = '203'
@@ -1347,6 +1436,84 @@ if (-not $DryRun) { $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPa
         added = @($manifest.added)
         dryRun = [bool]$DryRun
         manifestPath = (Get-ManifestPath $GameDir)
+    }
+}
+
+# ---------------------------------------------------------------------------
+# renodx hook-mode diagnostics (ReShade.log evidence based)
+# ---------------------------------------------------------------------------
+function Get-RenoHookState {
+    # Reads the addon's ReShade.log* to learn how the last run patched the stack.
+    # The addon does not log its overlay status ('NO NR FEATURE MATCHED'), but it
+    # does log its Streamline patch activity: mode 1 prints 'installing/hooks
+    # installed in sl.interposer.dll' (or sl.common.dll on Multi-GPU builds),
+    # mode 2 leaves Streamline untouched.
+    # recommend = 'streamline' when a Streamline-routed game ran NGX-only
+    # (addon guidance: 'set EnableHooks=1 ... and restart the game').
+    param($GameDir, $ExeDir)
+    $oid = Get-OldManifest $GameDir
+    $hosted = [bool](Get-ManifestProp $oid 'host64')
+    $streamlineHost = $false
+    $streamlinePatched = $false
+    $ngxSeen = $false
+    $featureMatched = $false
+    $proxyCompileFail = $false
+    $logDirs = @($ExeDir)
+    if ($hosted) { $logDirs += (Join-Path $ExeDir 'host64') }
+    foreach ($ld in $logDirs) {
+        if (Test-Path -LiteralPath (Join-Path $ld 'sl.interposer.dll')) { $streamlineHost = $true; break }
+    }
+    foreach ($ld in $logDirs) {
+        foreach ($name in @('ReShade.log', 'ReShade.log1')) {
+            $p = Join-Path $ld $name
+            if (-not (Test-Path -LiteralPath $p)) { continue }
+            try { $t = [System.IO.File]::ReadAllText($p) } catch { continue }
+            $ci = [System.StringComparison]::OrdinalIgnoreCase
+            if ($t.IndexOf('installing Streamline hooks into sl.', $ci) -ge 0 -or
+                $t.IndexOf('Streamline hooks installed in sl.', $ci) -ge 0) { $streamlinePatched = $true }
+            if ($t.IndexOf('D3D12 NGX hooks installed', $ci) -ge 0 -or
+                $t.IndexOf('NGX module scan', $ci) -ge 0) { $ngxSeen = $true }
+            if ($t.IndexOf('NGX feature create intercepted', $ci) -ge 0 -or
+                $t.IndexOf('first NGX evaluate intercepted', $ci) -ge 0) { $featureMatched = $true }
+            if ($t.IndexOf('proxy encode compilation failed', $ci) -ge 0) { $proxyCompileFail = $true }
+        }
+    }
+    # effective mode: manifest hookMode + deployed ReShade.ini EnableHooks are
+    # authoritative for what the next run uses; fall back to log evidence when
+    # neither is set (a reinstall can leave a stale patched log behind).
+    $iniHooks = $null
+    foreach ($ld in $logDirs) {
+        $ip = Join-Path $ld 'ReShade.ini'
+        if (Test-Path -LiteralPath $ip) {
+            $m = [regex]::Match([System.IO.File]::ReadAllText($ip), '(?mi)^\[RenoDX\.DLSS5\][\s\S]*?^EnableHooks\s*=\s*(\d)')
+            if ($m.Success) { $iniHooks = $m.Groups[1].Value; break }
+        }
+    }
+    $manifestMode = Get-ManifestProp $oid 'hookMode'
+    if ($manifestMode -eq '1' -or $iniHooks -eq '1') { $patchedEffective = $true }
+    elseif ($manifestMode -eq '2' -or $iniHooks -eq '2') { $patchedEffective = $false }
+    else { $patchedEffective = $streamlinePatched }
+    $curMode = if ($manifestMode -eq '1' -or $manifestMode -eq '2') { [int]$manifestMode }
+    elseif ($iniHooks -eq '1') { 1 } elseif ($iniHooks -eq '2') { 2 }
+    elseif ($streamlinePatched) { 1 } elseif (-not $streamlineHost) { $null } else { 2 }
+    # 'feature create intercepted' only proves the direct-NGX path works when the
+    # log shows no Streamline patch at all - a prior EnableHooks=1 run (stale log
+    # after a reinstall) also prints the intercept line but proves nothing about
+    # NGX-only. So direct-NGX evidence = feature matched AND Streamline untouched.
+    $directNgx = $featureMatched -and -not $streamlinePatched
+    $recommend = $null
+    # Only recommend when the game is Streamline-routed AND the addon was never
+    # actually reached: a direct-NGX title (GOW Ragnarok, GTA V Enhanced, RDR1)
+    # logs 'NGX feature create intercepted' and works fine on EnableHooks=2.
+    if ($streamlineHost -and -not $patchedEffective -and $ngxSeen -and -not $directNgx) { $recommend = 'streamline' }
+    [pscustomobject]@{
+        streamlineHost = [bool]$streamlineHost
+        streamlinePatched = [bool]$streamlinePatched
+        ngxSeen = [bool]$ngxSeen
+        featureMatched = [bool]$directNgx
+        proxyCompileFail = [bool]$proxyCompileFail
+        enablehooks = $curMode
+        recommend = $recommend
     }
 }
 
@@ -1456,7 +1623,49 @@ if (-not $Json) {
     if ($neural.Count -gt 1) { Write-Err "!! Multiple neural providers active: $($neural.Name -join ', ') - only one may be present. Chicken stays inert beside RenoDX." }
     elseif ($neural.Count -eq 1) { Write-Ok "Neural provider: $($neural[0].FullName.Substring($GameDir.Length))" }
 
-    if (-not $Json) {
+$prov2 = Get-ManifestProp $manifest 'provider'
+    $hookRec = $null
+    $hookMode = $null
+    $hostSL = $false
+    $proxyFail = $false
+    $featureMatched = $false
+    if ($prov2 -eq 'renodx') {
+        $hs = Get-RenoHookState $GameDir $exeDir
+        $hostSL = [bool]$hs.streamlineHost
+        $hookMode = $hs.enablehooks
+        $featureMatched = [bool]$hs.featureMatched
+        $modeNote = if ($hs.enablehooks -eq 1) { 'Streamline' } elseif ($hs.enablehooks -eq 2) { 'NGX-only' } else { 'n/a' }
+        # RenoDX DLSS5 detours the D3D12 NGX evaluate. On Vulkan it only
+        # registers when the DLSS5-Feeder transport is present: the Feeder
+        # addon creates a private in-process D3D12 device so the consumer has
+        # something to hook. Without it the addon declines to register and the
+        # neural pass never runs. This is the same Feeder + RenoDX config the
+        # DLSS 5 Swapper ships on Vulkan; flag only when the feeder is absent.
+        $isVulkan = ($exe.Label -eq 'Vulkan') -or
+                    ((Get-ManifestProp $manifest 'api') -eq 'vulkan')
+        $manFeeder = Get-ManifestProp $manifest 'feeder'
+        $feedAddon64 = Join-Path $exeDir 'dlss5-feed.addon64'
+        $feedAddon32 = Join-Path $exeDir 'dlss5-feed.addon32'
+        $feederPresent = [bool]$manFeeder -or (Test-Path -LiteralPath $feedAddon64) -or (Test-Path -LiteralPath $feedAddon32)
+        if ($isVulkan -and -not $feederPresent) {
+            $checks += [pscustomobject]@{ Item = 'Provider vs API'; Ok = $false; Note = "renodx on Vulkan needs the DLSS5-Feeder transport (manifest.feeder=$manFeeder; no dlss5-feed.addon64 next to the exe) - reinstall (the installer auto-enables the Feeder on Vulkan)" }
+        } elseif ($isVulkan -and $feederPresent) {
+            $checks += [pscustomobject]@{ Item = 'Provider vs API'; Ok = $true; Note = "renodx on Vulkan via the Feeder transport (the consumer registers against the Feeder's private D3D12 device)" }
+        } elseif ($hs.recommend -eq 'streamline') {
+            $hookRec = 'streamline'
+            $checks += [pscustomobject]@{ Item = 'RenoDX fix'; Ok = $false; Note = 'set EnableHooks=1 in ReShade.ini (.\DLSS5-Swapper.ps1 -FixHooks does this) for Streamline-routed games' }
+        } else {
+            $hookNote = $modeNote
+            if ($hs.featureMatched -and $hs.enablehooks -eq 2) { $hookNote = 'NGX-only, direct-NGX feature matched (DLSS NR active, no fix needed)' }
+            $checks += [pscustomobject]@{ Item = 'RenoDX hook mode'; Ok = $true; Note = $hookNote }
+        }
+        if ($hs.proxyCompileFail) {
+            $proxyFail = $true
+            $checks += [pscustomobject]@{ Item = 'NR upscaling'; Ok = $false; Note = "addon couldn't compile its proxy shader (cs_5_1) - addon/runtime/driver issue, see README \u00A78, report to the addon author" }
+        }
+    }
+
+if (-not $Json) {
         foreach ($logName in @('dlss5-feed.log','deep-fried-chicken.log')) {
             $log = Join-Path $exeDir $logName
             if (Test-Path -LiteralPath $log) {
@@ -1483,6 +1692,61 @@ if ($manifest) {
         checks = @($checks)
         provider = Get-ManifestProp $manifest 'provider'
         installed = [bool]$manifest
+        recommendation = $hookRec
+        hookMode = $hookMode
+        streamlineHost = $hostSL
+        featureMatched = $featureMatched
+        nrProxyCompileFail = $proxyFail
+    }
+}
+
+# ---------------------------------------------------------------------------
+# renodx hook-mode repair
+# ---------------------------------------------------------------------------
+function Invoke-FixHooks {
+    # Rewrites [RenoDX.DLSS5] EnableHooks in the deployed ReShade.ini (and the
+    # host64 variant) without reinstalling, and records the chosen mode in the
+    # manifest so later installs remember it. -RenoHooks 'auto' decides from
+    # Get-RenoHookState log evidence (streamline when a Streamline host ran
+    # NGX-only, else ngx).
+    param($GameDir)
+    $manifest = Get-OldManifest $GameDir
+    if (-not $manifest) { Fail "No DLSS5 manifest found in $GameDir (nothing to fix)." }
+    if ((Get-ManifestProp $manifest 'provider') -ne 'renodx') { Fail "Hook mode only applies to RenoDX installs." }
+    $scan = Get-GameScan $GameDir
+    $exe = $scan.Chosen
+    if (-not $exe) { Fail "No game executable found in $GameDir." }
+    $exeDir = Split-Path -Parent $exe.Path
+    $hs = Get-RenoHookState $GameDir $exeDir
+    $target = if ($RenoHooks -eq 'streamline') { '1' } elseif ($RenoHooks -eq 'ngx') { '2' } else {
+        if ($hs.recommend -eq 'streamline') { '1' }
+        elseif ($hs.enablehooks -eq 1 -or $hs.enablehooks -eq 2) { [string]$hs.enablehooks }
+        else { '2' }
+    }
+    $iniPaths = @(Join-Path $exeDir 'ReShade.ini')
+    $hi = Join-Path $exeDir 'host64\ReShade.ini'
+    if (Test-Path -LiteralPath $hi) { $iniPaths += $hi }
+    foreach ($ip in $iniPaths) {
+        if ($DryRun) {
+            Write-Step "[dry] would set $ip [RenoDX.DLSS5] EnableHooks=$target"
+        } elseif (Test-Path -LiteralPath $ip) {
+            Set-IniValues -Path $ip -Sections @{ 'RenoDX.DLSS5' = @{ 'EnableHooks' = $target } }
+        }
+    }
+    if (-not $DryRun) {
+        $om = @{}
+        foreach ($prop in $manifest.PSObject.Properties) { $om[$prop.Name] = $prop.Value }
+        $om['hookMode'] = $target
+        ConvertTo-Json ([pscustomobject]$om) -Depth 5 | Set-Content -LiteralPath (Get-ManifestPath $GameDir) -Encoding UTF8
+    }
+    $modeLabel = if ($target -eq '1') { 'Streamline' } else { 'NGX-only' }
+    if (-not $DryRun) { Write-Ok "RenoDX hook mode set to EnableHooks=$target ($modeLabel)" }
+    return [pscustomobject]@{
+        action = 'fixhooks'
+        gameDir = $GameDir
+        mode = $(if ($target -eq '1') { 'streamline' } else { 'ngx' })
+        enablehooks = $target
+        dryRun = [bool]$DryRun
     }
 }
 
@@ -1514,6 +1778,33 @@ Remove-Item -LiteralPath $backDir -Recurse -Force
         if (Test-Path -LiteralPath $host64Dir) { Remove-Item -LiteralPath $host64Dir -Recurse -Force }
     }
     Write-Ok "Uninstalled. Original files restored."
+    # Drop this game from the per-user Vulkan layer reference list and, only when
+    # no other game remains, unregister the HKCU ImplicitLayers entry and delete
+    # the layer DLLs - mirroring vulkan-layer.js detach() in the reference app.
+    if ((Get-ManifestProp $manifest 'api') -eq 'vulkan') {
+        $user = Join-Path $env:USERPROFILE '.dlss5vulkanlayer'
+        $uInstalls = Join-Path $user 'installs.json'
+        if (Test-Path -LiteralPath $uInstalls) {
+            $remaining = @()
+            try {
+                $data = Get-Content -LiteralPath $uInstalls -Raw | ConvertFrom-Json
+                $remaining = @($data.games | Where-Object { $_ -and ($_.TrimEnd('\') -ne $GameDir.TrimEnd('\')) })
+            } catch { $remaining = @() }
+            if (@($remaining).Count -gt 0) {
+                [System.IO.File]::WriteAllText($uInstalls, (@{ version = 1; games = $remaining } | ConvertTo-Json), (New-Object System.Text.UTF8Encoding($false)))
+                Write-Step "Vulkan user layer kept (still used by $(@($remaining).Count) other game$(if (@($remaining).Count -ne 1) { 's' }))."
+            } else {
+                foreach ($name in @('ReShade64.json','ReShade32.json')) {
+                    $jp = Join-Path $user $name
+                    if (Test-Path -LiteralPath $jp) {
+                        Remove-ItemProperty -Path 'HKCU:\Software\Khronos\Vulkan\ImplicitLayers' -Name $jp -ErrorAction SilentlyContinue
+                    }
+                }
+                if (Test-Path -LiteralPath $user) { Remove-Item -LiteralPath $user -Recurse -Force -ErrorAction SilentlyContinue }
+                Write-Step "Vulkan user layer removed (no more games reference it)."
+            }
+        }
+    }
     return [pscustomobject]@{ action = 'uninstall'; gameDir = $GameDir; removed = @($addedArr); restored = @($replArr); host64 = [bool](Get-ManifestProp $manifest 'host64') }
 }
 
@@ -1659,7 +1950,7 @@ if ($Discover) {
     exit 0
 }
 
-if ($Scan -or ($Install -and $GamePath) -or $Verify -or $Uninstall) {
+if ($Scan -or ($Install -and $GamePath) -or $Verify -or $Uninstall -or $FixHooks) {
     if (-not $GamePath) { Fail "Missing -GamePath <folder>" }
     if (-not (Test-Path -LiteralPath $GamePath)) { Fail "Game path not found: $GamePath" }
     $item = Get-Item -LiteralPath $GamePath
@@ -1690,6 +1981,12 @@ if ($Scan) {
     exit 0
 }
 
+if ($FixHooks) {
+    if (-not $Json) { Write-Step "Fixing RenoDX hook mode for $gameDir ..." }
+    $f = Invoke-FixHooks $gameDir
+    if ($Json -and $f) { $f | ConvertTo-Json -Compress -Depth 6 }
+    exit 0
+}
 if ($Install) {
     $styleIndex = switch ($Style) { 'natural' {1} 'cinematic' {2} default {0} }
     $apiArg = $Api
@@ -1725,5 +2022,6 @@ Write-Host "  .\DLSS5-Swapper.ps1 -BuildKit"
 Write-Host "  .\DLSS5-Swapper.ps1 -Scan -GamePath <folder>"
 Write-Host "  .\DLSS5-Swapper.ps1 -Install -GamePath <folder> [-Provider chicken|renodx] [-Passes N] [-Api d3d12|vulkan|...] [-MFGAddon]"
 Write-Host "  .\DLSS5-Swapper.ps1 -Verify -GamePath <folder>"
+Write-Host "  .\DLSS5-Swapper.ps1 -FixHooks -GamePath <folder> [-RenoHooks auto|ngx|streamline]"
 Write-Host "  .\DLSS5-Swapper.ps1 -Uninstall -GamePath <folder>"
 Write-Host "  .\DLSS5-Swapper.ps1 -Help"

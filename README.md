@@ -20,9 +20,25 @@ Electron desktop UI. Built as a Windows-only reimplementation of the concepts in
 > **only** in offline / single-player titles and modes. You are responsible for
 > what you inject into.
 
-## Quick start
+---
 
-### 1. Get the code
+## Table of contents
+
+1. Quick start
+2. Requirements
+3. Rendering API detection (how it works)
+4. RenoDX hook mode - `EnableHooks` and Streamline
+5. Providers
+6. Install options & the CLI
+7. The Electron UI
+8. Automation & JSON output
+9. Troubleshooting
+10. Notes & limitations
+11. Repository layout
+
+---
+
+## 1. Quick start
 
 ```powershell
 git clone https://github.com/IsGaraa/DLSS5.git
@@ -33,23 +49,7 @@ git lfs pull        # the binary kit ships via Git LFS
 > Updating: `git pull` (or launch the UI - it checks for updates and restarts
 > itself when a newer version exists).
 
-### 2. Requirements
-
-Full requirements (hardware, NVIDIA driver versions, permissions, kit rebuild
-sources) live in [Requirements.md](Requirements.md). The short version:
-
-| Requirement | Why | Verdict |
-|---|---|---|
-| Windows 10+ x64 | 64-bit hooks and neural runtimes | required |
-| PowerShell 5.1+ | the backend is a single `.ps1` | required |
-| NVIDIA RTX 30/40/50 + recent driver | DLSS 5 Neural Rendering needs Tensor Cores; see Requirements.md | required |
-| Node.js 18+ | the Electron UI | only for the UI |
-| Git + Git LFS | cloning and updating the repo, pulling `kit/` | required |
-| The `kit/` folder | binary DLLs and addons (already in the repo) | ships with clone |
-
-### 3. Launch the UI
-
-From the repo root, double-click:
+Launch the UI from the repo root (double-click):
 
 ```
 DLSS5-UI\start.bat
@@ -61,20 +61,7 @@ or run it from the `DLSS5-UI` folder:
 npm start
 ```
 
-The Electron window opens directly (no console window stays open). From there:
-
-| Action | How |
-|---|---|
-| **Add games** | *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep-scan a drive) |
-| **Rescan** | *Rescan all* re-scans every saved folder; the last scan is cached and loads instantly at startup |
-| **Install** | Pick a game, choose a provider and options, click *Install* |
-| **Verify** | Check what ended up in the folder vs. the manifest (tells you plainly if nothing was installed yet) |
-| **Restore** | Roll back any install from the journaled backup |
-| **Info** | *Info* tab - app version, Electron/Chromium/Node, OS, repository link, Report-a-bug |
-
-### 4. Or use the CLI - no UI needed
-
-Everything the UI does works straight from PowerShell:
+Everything the UI does also works straight from PowerShell:
 
 ```powershell
 # scan a game folder
@@ -83,17 +70,20 @@ Everything the UI does works straight from PowerShell:
 # install (API auto-detected, Deep Fried Chicken by default)
 .\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame"
 
-# 3 neural passes, Lumenite Kernel motion vectors
+# 3 neural passes
 .\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Passes 3
 
 # RenoDX with NeuralUplift
 .\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -NeuralUplift
 
-# MFG Unlock addon (ReShade addon, temporal midpoint correction, in-memory).
+# MFG Unlock addon (RTX 40, ReShade addon)
 .\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -MFGAddon
 
-# verify
+# check the install / hook state
 .\DLSS5-Swapper.ps1 -Verify -GamePath "C:\Games\SomeGame"
+
+# repair: rewrite RenoDX EnableHooks from ReShade.log evidence
+.\DLSS5-Swapper.ps1 -FixHooks -GamePath "C:\Games\SomeGame"
 
 # uninstall / restore the originals
 .\DLSS5-Swapper.ps1 -Uninstall -GamePath "C:\Games\SomeGame"
@@ -108,91 +98,211 @@ Everything the UI does works straight from PowerShell:
 Add `-DryRun` to any install to preview changes without touching the disk, and
 `-Launch` to start the game right after installing.
 
-## Screenshots
+## 2. Requirements
 
-![Game library - cover-style tiles with executable icons](screenshots/library-ui.png)
+Full requirements (hardware, NVIDIA driver versions, permissions, kit rebuild
+sources) live in [Requirements.md](Requirements.md). The short version:
 
-![Install page - provider, passes, and executable picker](screenshots/install-ui.png)
+| Requirement | Why | Verdict |
+|---|---|---|
+| Windows 10+ x64 | 64-bit hooks and neural runtimes | required |
+| PowerShell 5.1+ | the backend is a single `.ps1` | required |
+| NVIDIA RTX 30/40/50 + recent driver | DLSS 5 Neural Rendering needs Tensor Cores; see Requirements.md | required |
+| Node.js 18+ | the Electron UI | only for the UI |
+| Git + Git LFS | cloning and updating the repo, pulling `kit/` | required |
+| The `kit/` folder | binary DLLs and addons (already in the repo) | ships with clone |
 
-## Features
+---
 
-- **Render API auto-detection** - PE import / delay-load / binary-string analysis
-  for every `.exe` in a game folder - DirectX 8/9/10/11/12, Vulkan, OpenGL -
-  no per-game database needed.
-- **DLSS 5 transport** - the `DLSS5-Feeder` loadable addon plus the NVIDIA
-  Neural Rendering runtimes (`nvngx_dlss.dll`, `nvngx_dlssnr.dll`). Games with
-  native DLSS skip the feeder and plug straight into the native stream.
-- **Neural providers** (selectable):
-  - `chicken` (default) - **Deep Fried Chicken**, 1-30 sequential neural passes.
-  - `renodx` - **RenoDX DLSS5 Generic**, a single NeuralUplift pass.
-- **ReShade integration** - dxgi proxy for DirectX 11/12 (32-bit and 64-bit),
-  global / per-user Vulkan layer, `DLSS5_Feed.fx` + `lumenite_Kernel.fx`
-  motion-vector pipeline, `ReShade.ini` / `ReShadePreset.ini` wiring. Installs
-  ship the **complete** ReShade shader package - all LumeniteFX/vort effects
-  plus `include/`, `Includes/` and `DrawText.fxh` - so every motion-vector
-  provider compiles (the kit once shipped only the feeder effect, which left
-  the default Lumenite Kernel provider uncompileable and the output dead).
-- **32-bit game support** - 32-bit titles get DLSS 5 through a 64-bit **host
-  helper** (`host64\dlss5-feed-host64.exe` + its own ReShade) installed beside
-  the game, with the 32-bit feeder add-on (`dlss5-feed.addon32`) hooked into
-  the game's ReShade; the helper and game share memory across the bitness
-  boundary. **DirectX 8/9** 32-bit titles are D3D-translated with **dgVoodoo2**
-  (built locally - see Notes *dgVoodoo2* below).
-- **Journaled installs** - every original file is backed up to
-  `_DLSS5_Backup\` with a manifest, and `-Uninstall` restores everything.
-  Switching providers also removes the disabled consumer's leftover add-on and
-  its `[RenoDX.DLSS5]` ini section, so a stale provider never keeps loading.
-- **MFG Unlock addon (optional)** - the **MFGUnlock** ReShade addon
-  (mavismmg/MFGAdaUnlock-RenoDx, a fork of Dreamt's) that unlocks 3x/4x/6x DLSS
-  **Multi Frame Generation** on RTX 40-series (temporal midpoint correction,
-  in-memory only, nothing in the game is modified). Dropped into the game's
-  ReShade addon path as `renodx-mfgunlock.addon64`, it drives the multiplier
-  through the game's own FG selector and its `MFG Unlock` ReShade panel
-  (`[RenoDX.MFGUnlock]` in `ReShade.ini`). Journaled and removed on
-  `-Uninstall`. See *Notes & limitations*.
-- **Info tab** - shows the app version, runtime (Electron/Chromium/Node), OS
-  and the repository remote, with an *Open GitHub page* button and the
-  *Report a bug* form (pre-filled with OS, versions and the console log tail).
-- **Auto game discovery** - scan installed launchers (Steam, GOG, Epic, EA,
-  Origin, Ubisoft) or deep-scan any drive/folder; results are saved so a
-  rescan catches newly installed games.
-- **Main-executable filtering** - the scan flags the main game executable
-  (DX12 preferred, then shallowest folder, then largest file) so the library
-  shows one clean card per game instead of every launcher/stub/helper exe;
-  alternate executables stay available via the launch picker on the install
-  page.
-- **Instant library** - the last scan is cached, so the UI opens directly on
-  your library without re-scanning every folder at startup; hit *Rescan* to
-  refresh. With no cached library and no folders yet, the UI auto-detects
-  games from your installed launchers automatically.
-- **Executable icons** - real icons are extracted from each game's `.exe` and
-  shown on the cover-style library cards.
-- **Startup auto-update** - the UI checks the GitHub remote on launch and
-  fast-forwards + restarts itself when a newer version is available.
+## 3. Rendering API detection (how it works)
 
-## Automation (`-Json`)
+The scan walks the game folder (up to three levels deep) and reads PE headers
+directly - **no per-game database**:
 
-Every command accepts `-Json`: all human-readable output goes to stderr, and a
-single compact JSON document is emitted on stdout - designed for the Electron
-UI and for scripting:
+1. **PE / COFF parsing.** For every `.exe`, the standard import directory
+   (index 1) and the delay-load directory (index 13) are parsed from the import
+   tables; the first "important" module wins:
+   `d3d12.dll` -> **D3D12**, `d3d11.dll` -> **D3D11**, `d3d10*.dll` -> D3D10,
+   `dxgi.dll` -> DXGI, `vulkan-1.dll` -> **Vulkan**, `d3d9.dll` -> D3D9,
+   `d3d8.dll` -> D3D8, `opengl32.dll` -> OpenGL.
+2. **Binary strings.** If the imports are obfuscated (packers), markers such as
+   `D3D12CreateDevice`, `D3D11CreateDevice`, `vkCreateInstance` are searched in
+   the raw file bytes.
+3. **Wrappers.** If the game links D3D but ships a **DXVK / vkd3d** wrapper DLL
+   next to the exe, the render API is reported as **Vulkan** (dynamic detection
+   via the wrapper modules, not just a static list).
+4. **Fallbacks.** Sibling-module imports and file-name heuristics.
 
-```powershell
-.\DLSS5-Swapper.ps1 -Scan    -GamePath "C:\Games\SomeGame" -Json
-.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -Json
-.\DLSS5-Swapper.ps1 -Discover -Json
+Both D3D11 and D3D12 map to the `dxgi.dll` payload hook in ReShade.
+
+### Engine-level fallback (launcher stubs)
+
+Some games are launched through a stub (a launcher, a shim, or a
+multi-component launcher) whose exe has **no graphics imports at all**. The
+scan then inspects the largest sibling DLLs' import tables next to the exe
+(`Get-ApiFromSiblings`) - a launcher next to `Disrupt_64.dll` (Watch Dogs 2)
+detects as DirectX 11 because the sibling carries `d3d11.dll` imports. Engine
+markers are checked before this (`Get-ApiFromEngine`), so a Unity game whose
+launcher stub is empty still resolves via `UnityPlayer.dll`.
+
+The fallback chain per game is: `Get-DetectedApi` (exe imports/strings) →
+engine DLL markers → largest sibling DLLs → *undetected*.
+
+### Hybrid D3D + Vulkan titles
+
+Some games ship both renderers (e.g. RDR2 with `kSettingAPI_Vulkan`). When a
+D3D-detected exe also embeds `vkCreateInstance` and a ReShade Vulkan layer is
+registered, the installer routes through the Vulkan layer instead of a local
+`dxgi.dll` proxy - a local proxy would load a second ReShade instance into the
+process and the two fight each other. The game's `ReShade.ini` gets an
+`[INSTALL] BasePath` pointing at the game folder so the layer resolves the
+right config, addons and shaders.
+
+### The D3D9 rule (32-bit only)
+
+Some titles (GTA IV, Saints Row 2) carry `d3d10`/`dxgi` imports **next to**
+`d3d9.dll`. D3D9 is a 32-bit-only API, so D3D9 wins **only for 32-bit exes**.
+A **64-bit** exe with a `Direct3DCreate9` string (RDR2) is always treated as
+D3D10/12.
+
+### Verified games
+
+| Game | Detected | Notes |
+|---|---|---|
+| BeamNG.drive | D3D12 (imports) | vania; RTX user |
+| RPCS3 | Vulkan (imports) | emulator exe |
+| Red Dead Redemption 2 | Vulkan (dynamic | hybrid D3D+Vulkan, flips via layer |
+| Red Dead Redemption (2025 PC) | D3D12 (imports) | Streamline host, direct-NGX |
+| Watch Dogs 2 | D3D11 (via sibling) | launcher has no imports; `Disrupt_64.dll` |
+| God of War Ragnarok | D3D12 (imports) | Streamline host, direct-NGX |
+| GTA V Enhanced | D3D12 (imports) | Streamline host, direct-NGX |
+| Spider-Man: Miles Morales | D3D12 (imports) | Streamline **routed** - needs hook fix |
+| Calm Down Stalin | *(undetected)* | GDI-only: ADVAPI32/KERNEL32/SHELL32/SHLWAPI/USER32, correctly no GPU API |
+
+---
+
+## 4. RenoDX hook mode - `EnableHooks` and Streamline
+
+The RenoDX DLSS5 addon ships a **hook mode** knob - `[RenoDX.DLSS5] EnableHooks`
+in `ReShade.ini` - that decides how the addon patches the DLSS runtime:
+
+| Value | Meaning | Notes |
+|---|---|---|
+| `0` | Hooks off | DLSS runs stock; NR disabled |
+| `1` | **Streamline** - patches `sl.interposer.dll` / `sl.common.dll` | For games that route DLSS through Streamline (multi-GPU / sl.interposer titles) |
+| `2` | **NGX-only** - patches the NGX modules directly | Default / safe. Correct for direct-NGX games; also the crash fallback ("if the game crashes at boot, set EnableHooks=2") |
+
+A Streamline host that runs `EnableHooks=2` goes two **very different** ways,
+and the tool tells them apart from `ReShade.log[1]` evidence:
+
+- **Direct-NGX titles** (God of War Ragnarok, GTA V Enhanced, RDR1 PC port)
+  call the DLSS runtime straight through NGX even though they also ship
+  `sl.interposer.dll`. Their logs show `NGX feature create intercepted` under
+  mode 2, and DLSS NR works with **no fix**. The addon's own log lines:
+  `D3D12 NGX hooks installed ...`, `NGX feature create intercepted:
+  feature=1 (DLSS/DLAA)`, `first NGX evaluate intercepted`.
+- **Streamline-routed titles** (Spider-Man: Miles Morales) go through
+  `slEvaluateFeature`. NGX-only never reaches the feature - **no** `feature
+  create intercepted` line appears, the addon reports
+  `Streamline: DLSS/DLSSD evaluations 0`, and the overlay shows
+  *"NO NR FEATURE MATCHED"*. These need `EnableHooks=1`.
+
+### 4.1 How the mode is auto-detected
+
+`Get-RenoHookState` (backend) / `detectHookMode` (UI, startup) reads the most
+recent `ReShade.log[1]` (including the `host64\` copy for 32-bit games) and
+answers four questions:
+
+1. **Is the game a Streamline host?** - `sl.interposer.dll` exists next to the
+   exe.
+2. **Did the last run patch Streamline?** - log contains
+   `installing Streamline hooks into sl.*` / `Streamline hooks installed in
+   sl.*` (`sl.interposer.dll` for the standard build, `sl.common.dll` for the
+   Multi-GPU variant).
+3. **Did the NGX layer engage?** - log contains `D3D12 NGX hooks installed` or
+   `NGX module scan`.
+4. **Was the game's DLSS reached directly?** - log contains
+   `NGX feature create intercepted` or `first NGX evaluate intercepted`.
+
+Feature interception only counts as direct-NGX evidence when the log has **no**
+Streamline-patch lines at all - a prior `EnableHooks=1` run leaves the intercept
+line in the log, so after a reinstall back to mode 2 it must not be misread as
+"direct-NGX works". The *patched* state is decided by deploy authority first
+(manifest `hookMode` / `ReShade.ini EnableHooks`), with log evidence as the
+fallback. So the recommendation is:
+
+```
+fixApplied  = manifest.hookMode == 1 || ini EnableHooks == 1
+directNgx   = logHas('NGX feature create intercepted') && !logHas(Streamline patch)
+recommend   = streamlineHost && !fixApplied && ngxSeen && !directNgx
 ```
 
-### JSON shapes
+### 4.2 One-click fix + memory
 
-| Command | Response fields |
-|---|---|
-| `-Scan` | `gameDir`, `chosen`, `candidates[]` (each with a `Main` flag), `hasNativeDlss`, `reshade{}` |
-| `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `mfg`, `mfgProxy`, `mfgAddon`, `added[]`, `dryRun`, `manifestPath` |
-| `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` (+ `note:"not installed"` when the game was never set up) |
-| `-Uninstall` | `removed[]`, `restored[]` |
-| `-Discover` | `launchers`, `root`, `folders[]`, `scans[]` (each scan is a `-Scan` shape) |
+- The library card for an install that needs it shows an amber chip
+  **"RenoDX fix needed"** and a **RenoDX Fix** button.
+- `-FixHooks -GamePath <folder>` (or the button) rewrites
+  `[RenoDX.DLSS5] EnableHooks` in the deployed `ReShade.ini` (and the
+  `host64\` variant when present) **without reinstalling**, then records the
+  chosen mode as `hookMode` in `_DLSS5_Backup\manifest.json`. Later installs
+  of the same game reuse the remembered mode; installing a game (or a fresh
+  install) never recommits to Streamline automatically - the safe NGX-only
+  default stands unless evidence says otherwise. With `-FixHooks` and no
+  explicit `-RenoHooks`, the current effective mode is preserved unless a
+  Streamline recommendation exists.
+- **Once applied the UI says so.** The recommendation is computed from the
+  *deployed* config, so after pressing **RenoDX Fix** (or `-FixHooks`) the card
+  switches to a green **"RenoDX fix applied"** chip and the Fix button
+  disappears immediately - no game relaunch required. The card treats an
+  `EnableHooks=1` present in `ReShade.ini` or a `hookMode="1"` in the manifest
+  as fix-applied, and only offers the fix again if neither is set. Note the
+  manifest + ini are the source of truth here: if a game was reinstalled back
+  to mode 2 after briefly running mode 1, the stale "Streamline hooks
+  installed" lines in the old log do **not** mask the recommendation - the fix
+  is offered again, as the game genuinely needs it.
+- A green **"DLSS NR active"** chip replaces the recommendation on Streamline
+  hosts that log feature interception under `EnableHooks=2` (and show no
+  Streamline-patch lines) - GOW Ragnarok, GTA V Enhanced and the RDR1 PC port
+  are confirmed to work this way, and the app now correctly leaves them alone
+  instead of recommending a pointless fix.
+- `-Verify` includes a `RenoDX fix` check item that *fails* with a `-FixHooks`
+  hint when Streamline is recommended, plus an `NR upscaling` check that flags
+  the `cs_5_1` proxy compile failure (see §9) and a `recommendation` /
+  `hookMode` / `streamlineHost` / `featureMatched` / `nrProxyCompileFail`
+  response fields for automation.
 
-## Install options
+**How to use it:** play the game once with the default install, then hit
+*Verify* (or let the card tell you). Three outcomes, all automatic:
+
+- **Streamline-routed** game (no feature intercepted on NGX-only) → amber
+  *RenoDX fix needed* + **RenoDX Fix** button.
+- **Direct-NGX** game (feature intercepted on NGX-only) → green
+  *DLSS NR active*, nothing to do.
+- **Already fixed** (`EnableHooks=1` in ini or manifest) → green
+  *RenoDX fix applied*, no button.
+
+Conversely, if a Streamline-mode game freezes at boot, reinstall (or
+`-FixHooks -RenoHooks ngx`) - the addon's own guidance, verbatim: *"if the game
+crashes at boot, set EnableHooks=2 (NGX-only still covers Streamline calls)"*.
+
+---
+
+## 5. Providers
+
+| | Deep Fried Chicken | RenoDX DLSS5 Generic |
+|---|---|---|
+| Passes | 1-30 sequential | 1 |
+| NeuralUplift | (highest pass) | Supported |
+| Frame generation coexistence | Experimental | - |
+| Feeder `warmup_rebuild` | `0` (required) | `180` |
+| Coexists in folder | Conflicts ignored (Chicken wins) | same |
+
+Chicken's multi-pass is the real "DLSS 5" selling point: every layer runs its
+own full neural pass, so quality scales with `-Passes`.
+
+---
+
+## 6. Install options & the CLI
 
 | Option | Values | Default | Meaning |
 |---|---|---|---|
@@ -208,8 +318,9 @@ UI and for scripting:
 | `-CleanFry` | switch | off | Chicken multi-pass cleanup |
 | `-TextureBoost` | switch | off | Experimental 8K path |
 | `-NeuralUplift` | switch | off | RenoDX NeuralUplift |
-| `-NeuralUplift` | switch | off | RenoDX NeuralUplift |
 | `-MFGAddon` | switch | off | Install the MFG Unlock ReShade addon (RTX 40) |
+| `-RenoHooks` | auto / ngx / streamline | auto | RenoDX addon hook mode (see §4). `auto` = remembered `hookMode`, else NGX-only |
+| `-FixHooks` | switch | off | Repair: rewrite `EnableHooks` from `ReShade.log` evidence (or force `-RenoHooks ngx`/`streamline`), no reinstall |
 | `-KitPath` | path | `.\kit` | Override the file kit location |
 | `-Exe` | name.exe | auto | Pick a specific executable |
 | `-DryRun` | switch | off | Do not write anything |
@@ -224,50 +335,134 @@ UI and for scripting:
 | `-ScanRoot` | path | (launchers) | Root folder for deep scan |
 | `-Depth` | 1-8 | 6 | Max sub-folder depth for deep scan |
 
-## How API detection works
+---
 
-The scan walks the game folder (up to three levels deep) and for each `.exe`
-reads the PE headers directly:
+## 7. The Electron UI
 
-1. **Imports** - the standard import directory (index 1) and the delay-load
-   directory (index 13) are parsed; the first "important" DLL wins:
-   `d3d12.dll` -> D3D12, `d3d11.dll` -> D3D11, `d3d10*.dll` -> D3D10,
-   `dxgi.dll` -> DXGI, `vulkan-1.dll` -> Vulkan, `d3d9.dll` -> D3D9,
-   `d3d8.dll` -> D3D8, `opengl32.dll` -> OpenGL.
-2. **Strings** - if the imports are obfuscated (packers), binary markers such as
-   `D3D12CreateDevice`, `D3D11CreateDevice`, `vkCreateInstance`, etc. are
-   searched in the raw file bytes.
-3. **Wrappers** - if the game links D3D but ships a DXVK/vkd3d wrapper DLL next
-   to the exe, the render API is reported as **Vulkan**.
-4. **Fallbacks** - sibling-module imports and file-name heuristics.
+| Action | How |
+|---|---|
+| **Add games** | *Add game folder* (scans just that folder) or *Auto-scan* (launchers or deep-scan a drive) |
+| **Rescan** | *Rescan all* re-scans every saved folder; the last scan is cached and loads instantly at startup |
+| **Install** | Pick a game, choose a provider and options, click *Install* |
+| **Verify** | One-click health check - shows only the checks that failed + a short summary line when all pass |
+| **Restore** | Roll back any install from the journaled backup |
+| **RenoDX Fix** | One-click `EnableHooks=1` rewrite for Streamline-routed games (see §4) |
+| **Info** | *Info* tab - app version, Electron/Chromium/Node, OS, repository link, Report-a-bug |
 
-Both D3D11 and D3D12 map to the `dxgi.dll` payload hook in ReShade.
+The game cards show just the essentials: the render API badge, a green
+*RenoDX/Chicken active* state, and - only when relevant - an amber fix/compile
+warning. Detection details (bitness, ReShade version, native-DLSS note) ride in
+the API badge tooltip instead of cluttering the tile.
 
-**Hybrid D3D + Vulkan titles.** Some games ship both renderers (e.g. RDR2 with
-`kSettingAPI_Vulkan`). When a D3D-detected exe also embeds `vkCreateInstance`
-and a ReShade Vulkan layer is registered, the installer routes through the
-Vulkan layer instead of a local `dxgi.dll` proxy - a local proxy would load a
-second ReShade instance into the process and the two fight each other. The
-game's `ReShade.ini` gets an `[INSTALL] BasePath` pointing at the game folder
-so the layer resolves the right config, addons and shaders. The D3D9-wins
-marker rule (GTA IV / Saints Row 2 carry d3d10/dxgi imports next to D3D9) only
-applies to 32-bit exes - D3D9 is a 32-bit-only API, so a 64-bit exe with a
-`Direct3DCreate9` string (RDR2) is always treated as D3D10/12.
+---
 
-## Provider comparison
+## 8. Automation (`-Json`) and JSON shapes
 
-| | Deep Fried Chicken | RenoDX DLSS5 Generic |
-|---|---|---|
-| Passes | 1-30 sequential | 1 |
-| NeuralUplift | (highest pass) | Supported |
-| Frame generation coexistence | Experimental | - |
-| Feeder `warmup_rebuild` | `0` (required) | `180` |
-| Coexists in folder | Conflicts ignored (Chicken wins) | same |
+Every command accepts `-Json`: all human-readable output goes to stderr, and a
+single compact JSON document is emitted on stdout - designed for the Electron
+UI and for scripting:
 
-Chicken's multi-pass is the real "DLSS 5" selling point: every layer runs its
-own full neural pass, so quality scales with `-Passes`.
+```powershell
+.\DLSS5-Swapper.ps1 -Scan    -GamePath "C:\Games\SomeGame" -Json
+.\DLSS5-Swapper.ps1 -Install -GamePath "C:\Games\SomeGame" -Provider renodx -Json
+.\DLSS5-Swapper.ps1 -FixHooks -GamePath "C:\Games\SomeGame" -Json
+.\DLSS5-Swapper.ps1 -Discover -Json
+```
 
-## Notes & limitations
+| Command | Response fields |
+|---|---|
+| `-Scan` | `gameDir`, `chosen`, `candidates[]` (each with a `Main` flag), `hasNativeDlss`, `reshade{}` |
+| `-Install` | `exe`, `api`, `provider`, `passes`, `feeder`, `mfg`, `mfgProxy`, `mfgAddon`, `added[]`, `dryRun`, `manifestPath` |
+| `-Verify` | `exe`, `api`, `checks[]`, `provider`, `installed` (+ `note:"not installed"`), and for RenoDX installs: `recommendation` (`null`/`streamline`), `hookMode` (`null`/`1`/`2`), `streamlineHost`, `featureMatched`, `nrProxyCompileFail` |
+| `-FixHooks` | `gameDir`, `mode` (`streamline`/`ngx`), `enablehooks` (`1`/`2`), `dryRun` |
+| `-Uninstall` | `removed[]`, `restored[]` |
+| `-Discover` | `launchers`, `root`, `folders[]`, `scans[]` (each scan is a `-Scan` shape) |
+
+The UI's startup library scan calls the manifest reader (`listBackups`) which
+runs the same log-based diagnostic on every renodx install, so the card chips
+are available before you even hit Verify.
+
+---
+
+## 9. Troubleshooting
+
+### 9.1 "NO NR FEATURE MATCHED (STANDBY/FAILED)" with 0 successful NR frames
+
+Symptom on a native-DLSS game: overlay shows *"DLSS is evaluating but the NR
+feature did not bind to an output"*, `Streamline: DLSS/DLSSD evaluations 0`,
+`Successful NR frames 0`.
+
+Cause: the addon ran **NGX-only** (`EnableHooks=2`) while the game routes its
+DLSS through Streamline (`sl.interposer.dll`). Fix (the addon's own guidance):
+
+- The log shows **no** `NGX feature create intercepted` line under mode 2 - the
+  app detects this and the card shows *RenoDX fix needed* - press **RenoDX Fix**
+  (or `.\DLSS5-Swapper.ps1 -FixHooks`). After the game relaunches with
+  `EnableHooks=1`, the log shows `installing Streamline hooks into
+  sl.interposer.dll...` and `NGX feature create intercepted`, and the overlay
+  binds the NR feature.
+
+### 9.2 NR proxy compile failed - `cs_5_1` / `0x8876086c`
+
+Symptom on a Streamline-routed game after the fix: the addon patches Streamline
+and intercepts `feature=1`, but every evaluation fails with something like
+`DLSS5 Generic proxy encode compilation failed with HRESULT 0x8876086c: error
+X3506: unrecognized compiler target 'cs_5_1'`.
+
+Cause: the addon's **runtime proxy shader** is compiled for a shader model the
+installed runtimes/driver cannot compile in that context - an **addon/runtime
+compiler issue**, **not** a config problem and not something the swapper can
+change. The `NR upscaling` verify check flags it. Verify the addon version and
+report to the addon author; test a known-good combo (e.g. the Streaming module
+runtimes the addon lists as compatible).
+
+### 9.3 Streamline mode freezes the game at boot
+
+Some titles (GTA V Enhanced double-patches) freeze at the first NGX evaluate
+after a loading screen when `EnableHooks=1`. Fix = back to `2`:
+`.\DLSS5-Swapper.ps1 -FixHooks -RenoHooks ngx`, or reinstall with
+`-RenoHooks ngx` / the UI's *NGX-only (safe)* option. This is exactly why the
+install **default is NGX-only** and Streamline is only enabled when log
+evidence or the user says so.
+
+### 9.4 The classic: "nothing happened / wrong API"
+
+Re-detect with the *Re-detect* button on the card, or `-Scan -GamePath` from
+the CLI, and check the detected render API against the game. Packers can hide
+imports - the string heuristic usually still catches them. Hybrid Vulkan+D3D
+titles flip to the Vulkan layer automatically (see §3).
+
+### 9.5 Vulkan requires the Feeder transport
+
+`renodx-dlss5` is a D3D12-only addon: it detours the D3D12 `EvaluateFeature`
+path, so a Vulkan process with no D3D12 device gives it nothing to hook and the
+addon refuses to register (`No add-on was registered ... Unloading again`). The
+fix is not to switch providers: the **DLSS5-Feeder transport** provides the
+consumer's D3D12 context inside the Vulkan process, and RenoDX registers
+against it. This is exactly how the DLSS 5 Swapper ships Vulkan: the Feeder
+route carries the RenoDX consumer (not Deep Fried Chicken).
+
+With the Feeder transport present:
+
+- the DLSS5-Feeder addon creates a private in-process D3D12 device
+- the neural consumer (renodx or chicken) hooks the D3D12 NGX via that device
+- the Vulkan frame data is fed across the device; NR runs normally
+
+The installer automatically enables the Feeder on Vulkan (`-Feeder off` is
+ignored there). If the kit is missing `dlss5-feed.addon64`, the install aborts
+with a clear message.
+
+If `Verify` reports *Provider vs API* on a Vulkan game, the old install was
+created before this fix and needs a reinstall (the installer now forces the
+Feeder on Vulkan).
+
+**Previous installs:** games installed with `-Provider renodx` and Vulkan before
+this fix have `feeder=false` in the manifest and a dead addon. Reinstall them to
+pick up the forced Feeder.
+
+---
+
+## 10. Notes & limitations
 
 - **64-bit + 32-bit (host helper)** - the neural stack (`nvngx_dlss*`, both
   providers and the feeder add-ons) is x86-64, so a 32-bit game cannot load it
@@ -275,11 +470,11 @@ own full neural pass, so quality scales with `-Passes`.
   (`host64\`) next to the game - `dlss5-feed-host64.exe`, its own ReShade hook
   and the NVIDIA runtimes - while the game folder gets the 32-bit feeder
   (`dlss5-feed.addon32`). The helper does the NGX work over shared memory, so a
-32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
-   and the like. A bundled 32-bit ReShade hook (`dxgi.dll`) is deployed next to
-   the exe automatically, and **DirectX 8/9** games are wrapped automatically
-   with **dgVoodoo2** (D3D8/9 -> D3D11). The UI asks for confirmation before
-   installing into a 32-bit game.
+  32-bit game gets DLSS 5 the same way the community does on GTA San Andreas
+  and the like. A bundled 32-bit ReShade hook (`dxgi.dll`) is deployed next to
+  the exe automatically, and **DirectX 8/9** games are wrapped automatically
+  with **dgVoodoo2** (D3D8/9 -> D3D11). The UI asks for confirmation before
+  installing into a 32-bit game.
 - **dgVoodoo2** - DirectX 8/9 translation for 32-bit games is **not bundled
   with the repo**: antivirus products flag dgVoodoo's DLLs on download (known
   false positives, 29/66 on VirusTotal), so nothing in this repository ever
@@ -296,7 +491,8 @@ own full neural pass, so quality scales with `-Passes`.
 - **OpenGL** needs a ReShade `opengl32.dll` proxy that is not bundled.
 - **Vulkan** picks the machine-wide ReShade layer
   (`C:\ProgramData\ReShade\`); if absent it falls back to a per-user implicit
-  layer under `%USERPROFILE%\.dlss5vulkanlayer`.
+  layer under `%USERPROFILE%\.dlss5vulkanlayer` (reference-counted via
+  `installs.json` so uninstalling one game never breaks another).
 - **Shader package** - `-BuildKit` harvests the whole ReShade shader tree from
   the local rpcs3 source (`reshade-shaders\Shaders`: `lumenite_*.fx`,
   `vort_*.fx`, `include/` and `Includes/`), and takes `DrawText.fxh` from the
@@ -346,7 +542,9 @@ Verified on GTA IV; treat it as a known-broken area marked for a **future fix**:
 - Until these are fixed, prefer 64-bit titles - the 64-bit path (in-game hook,
   visible RenoDX/Chicken tab, no host helper) is the reliable one.
 
-## Repository layout
+---
+
+## 11. Repository layout
 
 ```
 DLSS5-Swapper.ps1    # backend - the whole tool (single file)

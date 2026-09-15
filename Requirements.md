@@ -68,7 +68,9 @@ sources configured in `sources.json`:
 - **Deep Fried Chicken** (`chicken\deep-fried-chicken.addon64`,
   `deep-fried-chicken-nvngx.dll`) - from its Discord/Nexus.
 - **RenoDX DLSS5 Generic** (`renodx\renodx-dlss5.addon64`) - from the RenoDX
-  Discord (`#dlss5`), same `nvngx_dlssnr.dll` runtime.
+  Discord (`#dlss5`), same `nvngx_dlssnr.dll` runtime. **D3D12-only** - on
+  Vulkan games the installer automatically enables the DLSS5-Feeder transport
+  so the consumer has a D3D12 device to hook (see README *9.5*).
 - **NVIDIA runtimes** (`runtime\nvngx_dlss.dll`, `nvngx_dlssnr.dll`).
 - **dgVoodoo2** for 32-bit DirectX 8/9 games (`dgvoodoo\D3D8.dll`,
   `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe`) - antivirus products flag it

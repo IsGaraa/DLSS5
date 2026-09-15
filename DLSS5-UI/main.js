@@ -67,6 +67,7 @@ function buildInstallArgs(folder, o) {
   if (o.cleanFry) a.push('-CleanFry');
   if (o.texBoost) a.push('-TextureBoost');
   if (o.uplift) a.push('-NeuralUplift');
+  a.push('-RenoHooks', o.renohooks || 'ngx');
   a.push('-Feeder', o.feeder);
   if (o.mfgAddon) a.push('-MFGAddon');
   if (o.exe) a.push('-Exe', o.exe);
@@ -139,6 +140,66 @@ async function applyUpdate() {
   }
 }
 
+function detectHookMode(dir, manifest) {
+  const ret = { hookMode: manifest.hookMode || null, hookRecommend: null, hookApplied: false, featMatched: false, nrProxyCompileFail: false };
+  if (manifest.provider !== 'renodx') return ret;
+  const added = Array.isArray(manifest.added) ? manifest.added.map(String) : [];
+  const iniRel = added.find(f => f.replace(/\\/g, '/').endsWith('/ReShade.ini') || f.replace(/\\/g, '/') === 'ReShade.ini');
+  let iniDir = dir;
+  if (iniRel) iniDir = path.join(dir, path.dirname(iniRel.replace(/\\/g, '/')));
+  const exeDirs = [iniDir, path.join(iniDir, 'host64')];
+  const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } };
+  let slHost = false, slPatched = false, ngxSeen = false, proxyFail = false, featMatched = false, vulkanNoGo = false;
+  for (const d of exeDirs) {
+    try { if (fs.existsSync(path.join(d, 'sl.interposer.dll'))) slHost = true; } catch (e) {}
+  }
+  const api = { dxg: false, vul: false };
+  for (const d of exeDirs) {
+    for (const n of ['ReShade.log', 'ReShade.log1']) {
+      const t = read(path.join(d, n));
+      if (!t) continue;
+      if (t.includes('installing Streamline hooks into sl.') || t.includes('Streamline hooks installed in sl.')) slPatched = true;
+      if (t.includes('D3D12 NGX hooks installed') || t.includes('NGX module scan')) ngxSeen = true;
+      if (t.includes('NGX feature create intercepted') || t.includes('first NGX evaluate intercepted')) featMatched = true;
+      if (t.includes('proxy encode compilation failed')) proxyFail = true;
+      if (t.includes('No add-on was registered') && t.includes('renodx-dlss5.addon64')) vulkanNoGo = true;
+      if (t.includes('vkCreateInstance(')) api.vul = true;
+      if (t.includes('CreateDXGIFactory')) api.dxg = true;
+    }
+  }
+  // A Vulkan renodx/chicken install only registers when the DLSS5-Feeder
+  // transport is deployed (it manufactures the consumer's private D3D12 device
+  // inside the game's ReShade). The API heuristic below must not flag an
+  // otherwise-working feeder-enabled Vulkan install as 'unsupported'.
+  const hasFeeder = manifest.feeder === true || added.some(f => f.replace(/\\/g, '/').endsWith('dlss5-feed.addon64') || f.replace(/\\/g, '/').endsWith('dlss5-feed.addon32'));
+  if (((manifest.api === 'vulkan' || api.vul) && !api.dxg) && !hasFeeder) vulkanNoGo = true;
+  // authority check: if a fix was already applied (EnableHooks=1 written to the
+  // deployed ini and/or recorded in the manifest), the log may not show the
+  // patched state until the game is relaunched - so don't re-recommend a fix.
+  let iniHooks = null;
+  for (const d of exeDirs) {
+    const m = read(path.join(d, 'ReShade.ini')).match(/^\[RenoDX\.DLSS5\][\s\S]*?^EnableHooks\s*=\s*(\d)/mi);
+    if (m) { iniHooks = m[1]; break; }
+  }
+  const applied = iniHooks === '1' || manifest.hookMode === '1';
+  // Direct-NGX titles (GOW Ragnarok, GTA V Enhanced, RDR1) log feature
+  // interception even on EnableHooks=2 — no Streamline fix needed. Only treat
+  // the intercept as direct-NGX evidence when no stale Streamline-patch lines
+  // are present (a prior EnableHooks=1 run also prints the intercept line).
+  const directNgx = featMatched && !slPatched;
+  // Only recommend when the game is Streamline-routed, the deployed config is
+  // NOT already Streamline (ini/manifest authority — a stale patched log after
+  // a reinstall must not suppress the fix), and the addon was never reached.
+  if (slHost && !applied && ngxSeen && !directNgx) ret.hookRecommend = 'streamline';
+  ret.hookApplied = applied;
+  ret.featMatched = directNgx && !vulkanNoGo;
+  ret.nrProxyCompileFail = proxyFail;
+  ret.vulkanNoGo = vulkanNoGo;
+  ret.hookRecommend = vulkanNoGo ? null : ret.hookRecommend;
+  if (!ret.hookMode) ret.hookMode = slPatched ? '1' : slHost ? '2' : null;
+  return ret;
+}
+
 function listBackups(folders) {
   const out = [];
   for (const dir of folders) {
@@ -164,7 +225,8 @@ function listBackups(folders) {
         date: arr && arr.date,
         size,
         added: added,
-        replaced: Array.isArray(arr.replaced) ? arr.replaced.map(r => (r && r.file) || String(r)) : []
+        replaced: Array.isArray(arr.replaced) ? arr.replaced.map(r => (r && r.file) || String(r)) : [],
+        ...detectHookMode(dir, arr)
       });
     } catch (e) {}
   }
@@ -354,6 +416,7 @@ ipcMain.handle('discover', (e, root, depth) => {
 });
 ipcMain.handle('install', (e, folder, opts) => runSwapper(buildInstallArgs(folder, opts)));
 ipcMain.handle('verify', (e, folder) => runSwapper(['-Verify', '-Json', '-GamePath', folder]));
+ipcMain.handle('hook-fix', (e, folder, mode) => runSwapper(['-FixHooks', '-Json', '-GamePath', folder, '-RenoHooks', mode || 'auto']));
 ipcMain.handle('uninstall', (e, folder) => runSwapper(['-Uninstall', '-Json', '-GamePath', folder]));
 ipcMain.handle('backups', (e, folders) => listBackups(folders));
 ipcMain.handle('report-bug', (e, payload) => reportBug(payload));

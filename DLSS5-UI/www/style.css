@@ -411,12 +411,18 @@ body.busy #busy { display: flex; }
 #d-input:focus { outline: none; border-color: var(--accent); }
 
 .vert { display: flex; flex-direction: column; gap: 8px; }
-.vrow { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
-.vrow .ic { flex: 0 0 22px; text-align: center; font-size: 17px; font-weight: 800; }
-.vrow .ic.ok { color: var(--accent); }
-.vrow .ic.fail { color: var(--red); }
-.vrow .ic.warn { color: var(--amber); }
+.vrow { display: flex; align-items: center; gap: 12px; font-size: 13px; padding: 4px 2px; }
+.vrow .ic {
+  flex: 0 0 30px; height: 30px; text-align: center; font-size: 22px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(255,255,255,.06);
+}
+.vrow .ic.ok { color: var(--accent); background: rgba(156,229,100,.14); }
+.vrow .ic.fail { color: var(--red); background: rgba(240,97,109,.14); }
+.vrow .ic.warn { color: var(--amber); background: rgba(245,181,68,.14); }
 .vrow .note2 { color: var(--dim); margin-left: auto; text-align: right; }
+.vrow .detail-row { flex: 1; }
+.vsep { height: 1px; background: var(--border); margin: 12px 0; }
 
 /* ---------- toast ---------- */
 #toast {

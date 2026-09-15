@@ -94,6 +94,12 @@
               </div>
               <div id="opt-renodx" class="optgrp hidden">
                 <p class="note">RenoDX DLSS5 Generic - single NeuralUplift pass on top of native DLSS.</p>
+                <label class="lbl">RenoDX hook mode <span class="hint">(Auto: detect from ReShade.log; Streamline for sl.interposer / sl.common titles; switch to NGX-only if it freezes at boot)</span></label>
+                <select id="o-renohooks">
+                  <option value="auto" selected>Auto (detect from game)</option>
+                  <option value="ngx">NGX-only (safe)</option>
+                  <option value="streamline">Streamline</option>
+                </select>
               </div>
 
               <label class="lbl">Rendering API <span class="hint">(leave Auto to use the detected renderer)</span></label>

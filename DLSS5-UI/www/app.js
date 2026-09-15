@@ -225,23 +225,40 @@ function gameCard(g) {
   const apiTxt = g.api ? (g.label || g.api) : 'undetected';
   badge.textContent = apiTxt;
   if (g.via && g.via !== apiTxt) badge.title = 'detected via ' + g.via;
+  if (g.native) badge.title = (badge.title ? badge.title + ' \u00B7 ' : '') + 'native DLSS';
   chips.appendChild(badge);
-  if (g.native) chips.appendChild(chip('accent', 'Native DLSS'));
-  if (g.reshade) chips.appendChild(chip('blue', 'ReShade ' + g.reshade.ver));
   if (g.bit) chips.appendChild(chip('dim', g.bit + '-bit'));
   const inst = state.installed && state.installed[String(g.dir).toLowerCase()];
-  if (inst) chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
-  if (inst && inst.mfgAddon) chips.appendChild(chip('purple', 'MFG addon'));
+  if (inst) {
+    chips.appendChild(chip('green', '\u2713 ' + (inst.provider === 'renodx' ? 'RenoDX' : 'Chicken') + ' active'));
+    if (inst.mfgAddon) chips.appendChild(chip('purple', 'MFG addon'));
+    if (inst.provider === 'renodx') {
+      if (inst.vulkanNoGo) {
+        chips.appendChild(chip('red', 'RenoDX \u00B7 Vulkan no Feeder'));
+      } else if (inst.hookRecommend === 'streamline') {
+        chips.appendChild(chip('amber', 'RenoDX fix needed'));
+      } else if (inst.hookApplied) {
+        chips.appendChild(chip('green', 'RenoDX fix applied'));
+      } else if (inst.featMatched) {
+        chips.appendChild(chip('green', 'DLSS NR active'));
+      }
+      if (inst.nrProxyCompileFail) chips.appendChild(chip('amber', 'NR proxy compile failed'));
+    }
+  }
 
   const btns = document.createElement('div');
   btns.className = 'gc-btns';
   const install = mkBtn('accent grow', 'Install', () => { state.selected = g; showPage('install'); });
+  const fixHooksBtn = inst && inst.provider === 'renodx' && inst.hookRecommend === 'streamline'
+    ? mkBtn('accent', 'RenoDX Fix', () => fixHooks(g))
+    : null;
   const verify = mkBtn('ghost', 'Verify', () => verifyGame(g));
   const redetect = mkBtn('ghost', 'Re-detect', () => reDetect(g));
   redetect.title = 'Re-detect the renderer';
   const un = mkBtn('danger', 'Restore', () => uninstallGame(g));
   if (!g.reshade && !g.native && g.api) un.textContent = 'Uninstall';
   un.title = 'Remove the DLSS5 stack and restore original files';
+  if (fixHooksBtn) btns.appendChild(fixHooksBtn);
   btns.appendChild(install);
   btns.appendChild(verify);
   btns.appendChild(redetect);
@@ -464,24 +481,31 @@ function renderInstall() {
 
 function readInstallOptions() {
   const exe = $('#o-exe').value || (state.selected ? state.selected.name : '');
-  return {
-    provider: state.provider,
-    passes: parseInt($('#o-passes').value, 10),
-    api: $('#o-api').value,
-    res: parseInt($('#o-res').value, 10),
-    style: $('#o-style').value,
-    preset: parseInt($('#o-preset').value, 10) || 0,
-    intensity: parseFloat($('#o-intensity').value) || 1,
-    mv: $('#o-mv').value,
-    feeder: $('#o-feeder').value,
-    cleanFry: $('#o-cleanfry').checked,
-    texBoost: $('#o-texboost').checked,
-    uplift: $('#o-uplift').checked,
-    force: $('#o-force').checked,
-    launch: $('#o-launch').checked,
-    mfgAddon: $('#o-mfgaddon').checked,
-    exe: exe
-  };
+let renohooks = $('#o-renohooks').value || 'auto';
+    if (renohooks === 'auto') {
+      const inst = state.selected && state.installed ? state.installed[String(state.selected.dir).toLowerCase()] : null;
+      const mem = inst && (inst.hookRecommend === 'streamline' || inst.hookMode === '1');
+      renohooks = mem ? 'streamline' : 'ngx';
+    }
+    return {
+      provider: state.provider,
+      passes: parseInt($('#o-passes').value, 10),
+      api: $('#o-api').value,
+      res: parseInt($('#o-res').value, 10),
+      style: $('#o-style').value,
+      preset: parseInt($('#o-preset').value, 10) || 0,
+      intensity: parseFloat($('#o-intensity').value) || 1,
+      mv: $('#o-mv').value,
+      feeder: $('#o-feeder').value,
+      cleanFry: $('#o-cleanfry').checked,
+      texBoost: $('#o-texboost').checked,
+      uplift: $('#o-uplift').checked,
+      renohooks,
+      force: $('#o-force').checked,
+      launch: $('#o-launch').checked,
+      mfgAddon: $('#o-mfgaddon').checked,
+      exe
+    };
 }
 
 function doInstall() {
@@ -536,11 +560,24 @@ async function verifyGame(g) {
     const checks = (r.checks || []).map(c =>
       '<div class="vrow"><span class="ic ' + (c.Ok ? 'ok' : 'fail') + '">' + (c.Ok ? '\u2713' : '\u2717') + '</span>' +
       '<span>' + esc(c.Item) + '</span><span class="note2">' + esc(String(c.Note || '')) + '</span></div>').join('');
+    const hookRows = [];
+    if (r.hookMode != null) hookRows.push('<div class="vrow"><span class="ic ' + (r.recommendation ? 'fail' : 'ok') + '">' + (r.recommendation ? '\u2717' : '\u2713') + '</span><span>Hook mode</span><span class="note2">' +
+      esc(r.hookMode === 1 ? 'Streamline (EnableHooks=1)' : r.hookMode === 2 ? 'NGX-only (EnableHooks=2)' : 'n/a') + (r.featureMatched ? ' \u00B7 direct NGX matched' : '') + (r.recommendation ? ' \u00B7 fix needed' : '') + '</span></div>');
+    const details = [
+      'Renderer: ' + (g.label || r.api || '?') + (g.bit ? ' (' + g.bit + '-bit)' : ''),
+      'Provider: ' + (r.provider === 'renodx' ? 'RenoDX DLSS5' : r.provider === 'chicken' ? 'Deep Fried Chicken' : (r.provider || 'n/a')),
+      'Native DLSS transport: ' + (g.native ? 'yes' : 'no (feeder)'),
+      'Streamline host: ' + (r.streamlineHost ? 'yes' : 'no'),
+      'NR proxy shader: ' + (r.nrProxyCompileFail ? 'compile FAILED (cs_5_1)' : 'ok'),
+    ].map(t => '<div class="vrow"><span class="ic"><span style="font-size:14px">\u00b7</span></span><span class="detail-row">' + esc(t) + '</span></div>').join('');
     showModal('Verify \u00B7 ' + r.exe,
       '<div class="m-intro">Loaded as <samp>' + esc(r.api || '?') + '</samp>' +
       (r.installed ? '  \u00B7  manifest found (provider <samp>' + esc(r.provider || '?') + '</samp>)' : '  \u00B7  not installed') + '</div>' +
-      '<div class="vert">' + checks + '</div>',
+      '<div class="vert">' + details + '</div>' +
+      '<div class="vsep"></div>' +
+      '<div class="vert">' + hookRows.join('') + checks + '</div>',
       [{ label: 'Close', cls: 'ghost', action: closeModal }]);
+    loadInstalled();
   } catch (e) {
     toast(e.message);
   } finally {
@@ -595,6 +632,29 @@ function removeGame(g) {
       }
     }
   ]);
+}
+
+// ---------------------------------------------------------------- reno hook fix
+async function fixHooks(g) {
+  showModal('Fix RenoDX hook mode',
+    '<div class="m-intro">Rewrite <b>' + esc(g.name) + '</b>\u2019s addon config to <b>Streamline (EnableHooks=1)</b>. This is a one-line change to <samp>ReShade.ini</samp> \u2014 no reinstall needed. The choice is remembered in the manifest for future installs.<br><br>This fix applies when the game routes DLSS through Streamline (<code>sl.interposer.dll</code> / <code>sl.common.dll</code>) and the addon previously ran NGX-only.</div>',
+    [{ label: 'Cancel', cls: 'ghost', action: closeModal },
+     { label: 'Apply Streamline mode', cls: 'accent', action: () => { closeModal(); doFixHooks(g, 'streamline'); } }]);
+}
+async function doFixHooks(g, mode) {
+  setBusy(true);
+  try {
+    const r = await api.invoke('hook-fix', g.dir, mode);
+    const modeLabel = r.mode === 'streamline' ? 'Streamline (EnableHooks=1)' : 'NGX-only (EnableHooks=2)';
+    toast('RenoDX hook mode set to ' + modeLabel);
+    logLine('hook mode fixed: ' + r.gameDir + ' -> EnableHooks=' + r.enablehooks, 'ok');
+    loadInstalled();
+  } catch (e) {
+    toast('Fix failed: ' + (String(e.message).split('\n')[0]));
+    logLine('hook mode fix failed: ' + e.message, 'err');
+  } finally {
+    setBusy(false);
+  }
 }
 
 // ---------------------------------------------------------------- backups
