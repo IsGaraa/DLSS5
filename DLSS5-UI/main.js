@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -140,8 +140,23 @@ async function applyUpdate() {
   }
 }
 
+const dcVerCache = new Map();
+function fileProductVersion(p) {
+  try {
+    const st = fs.statSync(p);
+    const key = p + '|' + st.mtimeMs;
+    if (dcVerCache.has(key)) return dcVerCache.get(key);
+    const out = execFileSync('powershell.exe', ['-NoProfile', '-Command',
+      "[System.Diagnostics.FileVersionInfo]::GetVersionInfo('" + p.replace(/'/g, "''") + "').ProductVersion"],
+      { windowsHide: true, encoding: 'utf8', timeout: 5000 });
+    const v = (out || '').trim();
+    dcVerCache.set(key, v);
+    return v;
+  } catch (e) { return ''; }
+}
+
 function detectHookMode(dir, manifest) {
-  const ret = { hookMode: manifest.hookMode || null, hookRecommend: null, hookApplied: false, featMatched: false, nrProxyCompileFail: false };
+  const ret = { hookMode: manifest.hookMode || null, hookRecommend: null, hookApplied: false, featMatched: false, nrProxyCompileFail: false, d3dcompilerLocal: false, d3dcompilerTrap: false, d3dcompilerVersion: null };
   if (manifest.provider !== 'renodx') return ret;
   const added = Array.isArray(manifest.added) ? manifest.added.map(String) : [];
   const iniRel = added.find(f => f.replace(/\\/g, '/').endsWith('/ReShade.ini') || f.replace(/\\/g, '/') === 'ReShade.ini');
@@ -149,7 +164,7 @@ function detectHookMode(dir, manifest) {
   if (iniRel) iniDir = path.join(dir, path.dirname(iniRel.replace(/\\/g, '/')));
   const exeDirs = [iniDir, path.join(iniDir, 'host64')];
   const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } };
-  let slHost = false, slPatched = false, ngxSeen = false, proxyFail = false, featMatched = false, vulkanNoGo = false;
+  let slHost = false, slPatched = false, ngxSeen = false, proxyFail = false, featMatched = false, vulkanNoGo = false, ngxRefused = false;
   for (const d of exeDirs) {
     try { if (fs.existsSync(path.join(d, 'sl.interposer.dll'))) slHost = true; } catch (e) {}
   }
@@ -166,7 +181,25 @@ function detectHookMode(dir, manifest) {
       if (t.includes('vkCreateInstance(')) api.vul = true;
       if (t.includes('CreateDXGIFactory')) api.dxg = true;
     }
+    for (const n of ['dlss5-feed.log', 'deep-fried-chicken.log']) {
+      const t = read(path.join(d, n));
+      if (!t) continue;
+      if (t.includes('it is refusing this PROCESS') || t.includes('NGX refused even the capability query')) ngxRefused = true;
+    }
   }
+  // d3dcompiler_47.dll trap: a Windows 8.1-era copy (6.3.x) beside the exe
+  // shadows System32's modern one and cannot compile the NR proxy shader
+  // (cs_5_1), so the neural pass silently fails every frame (README 9.2).
+  let dcPath = null, dcVersion = '';
+  for (const d of exeDirs) {
+    const p = path.join(d, 'd3dcompiler_47.dll');
+    try { if (fs.existsSync(p)) { dcPath = p; dcVersion = fileProductVersion(p); break; } } catch (e) {}
+  }
+  const dcTrap = dcVersion.startsWith('6.3.') || (!!dcPath && !dcVersion && proxyFail);
+  ret.d3dcompilerLocal = !!dcPath;
+  ret.d3dcompilerTrap = dcTrap;
+  ret.d3dcompilerVersion = dcVersion || null;
+  ret.ngxProcessRefused = ngxRefused;
   // A Vulkan renodx/chicken install only registers when the DLSS5-Feeder
   // transport is deployed (it manufactures the consumer's private D3D12 device
   // inside the game's ReShade). The API heuristic below must not flag an

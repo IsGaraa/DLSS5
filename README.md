@@ -402,19 +402,27 @@ DLSS through Streamline (`sl.interposer.dll`). Fix (the addon's own guidance):
   sl.interposer.dll...` and `NGX feature create intercepted`, and the overlay
   binds the NR feature.
 
-### 9.2 NR proxy compile failed - `cs_5_1` / `0x8876086c`
+### 9.2 NR proxy compile failed - `cs_5_1` / `0x8876086c` (the `d3dcompiler_47.dll` trap)
 
-Symptom on a Streamline-routed game after the fix: the addon patches Streamline
-and intercepts `feature=1`, but every evaluation fails with something like
+Symptom: the addon patches Streamline and intercepts `feature=1`, but every
+evaluation fails with something like
 `DLSS5 Generic proxy encode compilation failed with HRESULT 0x8876086c: error
-X3506: unrecognized compiler target 'cs_5_1'`.
+X3506: unrecognized compiler target 'cs_5_1'`. The log still reports frames
+delivered, so neural rendering silently does nothing.
 
-Cause: the addon's **runtime proxy shader** is compiled for a shader model the
-installed runtimes/driver cannot compile in that context - an **addon/runtime
-compiler issue**, **not** a config problem and not something the swapper can
-change. The `NR upscaling` verify check flags it. Verify the addon version and
-report to the addon author; test a known-good combo (e.g. the Streaming module
-runtimes the addon lists as compatible).
+Cause: **a Windows 8.1-era `d3dcompiler_47.dll` sitting in the game folder**
+(version `6.3.x`, e.g. `6.3.9600.16384` - the Win8.1 SDK build). Windows
+loads a DLL from the game folder in preference to `System32`, and that old
+compiler knows nothing past Shader Model 5.0. The neural proxy shader is
+compiled as `cs_5_1`, so it fails **every frame**. `ReShade.log` shows the
+`error X3506` line; the `d3dcompiler_47.dll` verify check flags it and the card
+shows *d3dcompiler trap (cs_5_1)*.
+
+Fix: **delete or rename the game-folder `d3dcompiler_47.dll`** (System32's
+modern copy is then used, which is correct). `Verify` reports it as
+`d3dcompiler_47.dll  FAIL  Windows 8.1-era build 6.3.x...`. Only if **no**
+local copy exists yet the proxy still fails is it an addon/runtime/driver
+issue - in that case report to the addon author.
 
 ### 9.3 Streamline mode freezes the game at boot
 
@@ -459,6 +467,31 @@ Feeder on Vulkan).
 **Previous installs:** games installed with `-Provider renodx` and Vulkan before
 this fix have `feeder=false` in the manifest and a dead addon. Reinstall them to
 pick up the forced Feeder.
+
+### 9.6 NGX refuses the whole process (`0xBAD00002` / `0xBAD00001`)
+
+Symptom: the Feeder attaches and feeds frames, then the D3D12/NGX session fails
+to start. `dlss5-feed.log` shows the capability query itself failing:
+
+```
+NGX feature requirements: SuperSampling ... -> the query itself failed 0xBAD00002 (PlatformError)
+NGX refused even the capability query in this process, before any device existed
+NVSDK_NGX_D3D12_Init -> 0xBAD00001 (FeatureNotSupported)
+```
+
+Cause: this is **not** the GPU or the driver - the same kit works in other games
+on the same machine. NGX is refusing this *process*. Something else loaded into
+the game (a mod injector, an overlay, anti-cheat, or another NGX consumer) is
+blocking it. The `NGX process refused` verify check names the usual suspects
+found beside the exe (a `dinput8.dll` ASI loader, `*.asi`/`*.ipe` mod plugins,
+`uext64.dll`, Uplay `lol.dll`) and tells you to check Uplay/Steam overlays too.
+
+Fix: **temporarily disable the offending injector/overlay, relaunch, and
+re-verify.** For a Watch Dogs-style mod stack that means renaming the ASI loader
+(`dinput8.dll`) - and any `*.asi`/`*.ipe`/`uext64.dll` plugins it pulls in - to
+`.bak`, or disabling the Uplay in-game overlay. If the NGX session then starts,
+the injector was the cause; restore the files and decide whether to keep mods or
+DLSS5 for that title.
 
 ---
 

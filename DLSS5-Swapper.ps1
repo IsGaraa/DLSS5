@@ -88,6 +88,7 @@ param(
     [ValidateSet('auto','forced','off')]
     [string]$Feeder = 'auto',
     [switch]$MFGAddon,
+    [switch]$LoadFromDllMain,
     [string]$KitPath = '',
     [string]$ExeFilter = '',
     [switch]$Force,
@@ -497,8 +498,19 @@ $sorted = @($candidates.ToArray()) | Sort-Object -Property @{ Expression = { if 
     $chosen = $null
     $seen = New-Object System.Collections.Generic.HashSet[string]
     $combined = @($sorted) + @($undetected.ToArray())
-    foreach ($c in $combined) {
-        if ($seen.Add($c.Name.ToLower())) { $chosen = $c; break }
+    # If this folder already has a DLSS5 install, trust the exe recorded in its
+    # manifest: a launcher/helper sitting next to the real game exe (e.g. a mod
+    # manager) must not win the size heuristic and get verified/patched instead.
+    $manExe = Get-ManifestProp (Get-OldManifest $GameDir) 'exe'
+    if ($manExe) {
+        foreach ($c in $combined) {
+            if ($c.Name -ieq $manExe) { $chosen = $c; break }
+        }
+    }
+    if (-not $chosen) {
+        foreach ($c in $combined) {
+            if ($seen.Add($c.Name.ToLower())) { $chosen = $c; break }
+        }
     }
     if ($chosen) {
         foreach ($c in $combined) {
@@ -946,7 +958,7 @@ function Get-ManifestProp {
 # install
 # ---------------------------------------------------------------------------
 function Install-Stack {
-    param($GameDir, $ApiOverride, $Provider, $Passes, $WorkPercent, $StyleIndex, $NrxPreset, $NrxIntensity, $SymMv, $SymCleanFry, $SymTexBoost, $SymUplift, $FeederMode, $ExeName, $MfgAddon = $false)
+    param($GameDir, $ApiOverride, $Provider, $Passes, $WorkPercent, $StyleIndex, $NrxPreset, $NrxIntensity, $SymMv, $SymCleanFry, $SymTexBoost, $SymUplift, $FeederMode, $ExeName, $MfgAddon = $false, $LoadFromDllMain = $false)
     if (-not (Test-Path -LiteralPath $Script:Kit)) { Fail "No kit folder. Run: .\DLSS5-Swapper.ps1 -BuildKit" }
     if (-not (Test-Kit)) { Fail "Kit incomplete. Rebuild with: .\DLSS5-Swapper.ps1 -BuildKit" }
 
@@ -1274,7 +1286,7 @@ if ($api -eq 'opengl') {
             Remove-Item -LiteralPath $sp -Force
         }
     }
-    if (-not $host64) { $earlyLoadAddon = $hostLoadAddon }
+    if ($LoadFromDllMain -and -not $host64) { $earlyLoadAddon = $hostLoadAddon }
 
     if ($useFeeder) {
         $feedDest = Join-Path $exeDir 'dlss5-feed.cfg'
@@ -1353,7 +1365,7 @@ if ($api -eq 'opengl') {
         $hostIni = Join-Path $exeDir 'host64\ReShade.ini'
         Add-Replace $hostIni
         $hsections = @{ 'ADDON' = @{ 'AddonPath' = '.\' }; 'INPUT' = @{ 'KeyOverlay' = '33,0,0,0' } }
-        if ($hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
+        if ($LoadFromDllMain -and $hostLoadAddon) { $hsections['ADDON']['LoadFromDllMain'] = $hostLoadAddon }
         if ($Provider -eq 'renodx') {
             $hsections['RenoDX.DLSS5'] = @{
                 'EnableHooks'        = "$renoHookMode"
@@ -1585,14 +1597,44 @@ $manifest = Get-OldManifest $GameDir
     if (Test-Path -LiteralPath (Join-Path $exeDir 'ReShade.ini')) {
         $ini = Get-Content -LiteralPath (Join-Path $exeDir 'ReShade.ini') -Raw
         if ($exe.Bitness -eq 64) {
-            $checks += [pscustomobject]@{ Item = 'ReShade.ini LoadFromDllMain'; Ok = ($ini -match 'LoadFromDllMain=.+addon64'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
+            # LoadFromDllMain makes ReShade initialize the add-on from inside its own
+            # DllMain; that preload is racy and can silently drop the neural consumer
+            # at startup (observed on rpcs3/Vulkan - registers only some launches).
+            # The deterministic route is the post-init add-on scan (AddonPath=\.\),
+            # which installs now use by default (README 9.8).
+            $lfdm = ($ini -match 'LoadFromDllMain=.+addon64')
+            $checks += [pscustomobject]@{ Item = 'ReShade.ini add-on load'; Ok = (-not $lfdm); Note = $(if ($lfdm) { 'LoadFromDllMain (flaky DllMain preload) present' } else { 'scan load (deterministic)' }) }
         } else {
             $checks += [pscustomobject]@{ Item = 'ReShade.ini AddonPath'; Ok = ($ini -match 'AddonPath=.\\\s*$' -or $ini -match 'AddonPath'); Note = ($ini -match 'DLSS5_MV_PROVIDER=3') }
             $hostIniP = Join-Path $exeDir 'host64\ReShade.ini'
             if (Test-Path -LiteralPath $hostIniP) {
                 $hini = Get-Content -LiteralPath $hostIniP -Raw
-                $checks += [pscustomobject]@{ Item = 'host64\ReShade.ini LoadFromDllMain'; Ok = ($hini -match 'LoadFromDllMain=.+addon64'); Note = ($hini -match 'AddonPath') }
+                $hlfdm = ($hini -match 'LoadFromDllMain=.+addon64')
+                $checks += [pscustomobject]@{ Item = 'host64\ReShade.ini add-on load'; Ok = (-not $hlfdm); Note = $(if ($hlfdm) { 'LoadFromDllMain (flaky DllMain preload) present' } else { 'scan load (deterministic)' }) }
             }
+        }
+    }
+    # d3dcompiler_47.dll trap: a Windows 8.1-era copy (6.3.x) sitting beside the
+    # exe wins the DLL search order over System32's modern copy and cannot
+    # compile the neural proxy shader (cs_5_1), so the NR pass silently fails
+    # every frame (README 9.2).
+    $dcLocal = $false
+    $dcTrap = $false
+    $dcDirs = @(@{ Dir = $exeDir; Label = 'game folder' })
+    if ($pfx) { $dcDirs += @{ Dir = (Join-Path $exeDir 'host64'); Label = 'host64\' } }
+    foreach ($dce in $dcDirs) {
+        $dcp = Join-Path $dce.Dir 'd3dcompiler_47.dll'
+        if (-not (Test-Path -LiteralPath $dcp)) { continue }
+        $dcLocal = $true
+        $dcv = Get-FileProductVersion $dcp
+        if ($dcv -match '^6\.3\.') {
+            $dcTrap = $true
+            $checks += [pscustomobject]@{ Item = ($pfx + 'd3dcompiler_47.dll'); Ok = $false; Note = "Windows 8.1-era build $dcv in the $($dce.Label) shadows System32 and cannot compile cs_5_1 - the NR pass silently fails every frame. Rename/delete it (README 9.2)." }
+        } elseif ($dcv -eq '?') {
+            $dcTrap = $true
+            $checks += [pscustomobject]@{ Item = ($pfx + 'd3dcompiler_47.dll'); Ok = $false; Note = "a copy sits in the $($dce.Label) but its version is unreadable - if it predates SM 5.1 the NR pass fails every frame. Rename/delete it (README 9.2)." }
+        } else {
+            $checks += [pscustomobject]@{ Item = ($pfx + 'd3dcompiler_47.dll'); Ok = $true; Note = "v$dcv in the $($dce.Label) - new enough for cs_5_1" }
         }
     }
     # MFG Unlock addon - must still sit in the addon path
@@ -1661,8 +1703,37 @@ $prov2 = Get-ManifestProp $manifest 'provider'
         }
         if ($hs.proxyCompileFail) {
             $proxyFail = $true
-            $checks += [pscustomobject]@{ Item = 'NR upscaling'; Ok = $false; Note = "addon couldn't compile its proxy shader (cs_5_1) - addon/runtime/driver issue, see README \u00A78, report to the addon author" }
+            $note = if ($dcTrap) { "addon couldn't compile its proxy shader (cs_5_1) - a Windows 8.1-era d3dcompiler_47.dll in the game folder is shadowing System32. Rename/delete it (README 9.2)." }
+                    else { "addon couldn't compile its proxy shader (cs_5_1) - no local d3dcompiler_47.dll found, so this is an addon/runtime/driver issue: see README 9.2, report to the addon author" }
+            $checks += [pscustomobject]@{ Item = 'NR upscaling'; Ok = $false; Note = $note }
         }
+    }
+
+    # Foreign injector / overlay: the Feeder's NGX session is per-process. Some
+    # games load a mod injector or overlay that makes NGX refuse the whole
+    # process (0xBAD00002 PlatformError on a pure capability query, before any
+    # device exists). Detect the signature in the Feeder log and name the
+    # injector files sitting beside the exe (README 9.6).
+    $ngxBlock = $false
+    $vLogDirs = @($exeDir)
+    if ($pfx) { $vLogDirs += (Join-Path $exeDir 'host64') }
+    foreach ($ld in $vLogDirs) {
+        $fp = Join-Path $ld 'dlss5-feed.log'
+        if (-not (Test-Path -LiteralPath $fp)) { continue }
+        try { $ft = [System.IO.File]::ReadAllText($fp) } catch { continue }
+        if ($ft.IndexOf('it is refusing this PROCESS', [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+            $ft.IndexOf('NGX refused even the capability query', [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $ngxBlock = $true; break }
+    }
+    $injectors = @(Get-ChildItem -LiteralPath $exeDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^(dinput8|dsound|winmm|version|uext64|lol)\.dll$' -or $_.Extension -in '.asi','.ipe' } |
+        ForEach-Object { $_.Name })
+    $injList = @($injectors | Sort-Object -Unique)
+    if ($ngxBlock) {
+        $what = if ($injList.Count) { 'possible source(s): ' + ($injList -join ', ') + ' beside the game exe; also check Uplay/Steam or other overlays' }
+                else { 'no known injector files found beside the exe - look for Uplay/Steam/other overlays or anti-cheat loaded into the game' }
+        $checks += [pscustomobject]@{ Item = 'NGX process refused'; Ok = $false; Note = "the Feeder's NGX session was refused for the whole process (0xBAD00002 PlatformError / 0xBAD00001 FeatureNotSupported before any device). Another injector or overlay is blocking NGX - $what. Temporarily disable it, relaunch, and re-verify (README 9.6)." }
+    } elseif ($injList.Count) {
+        $checks += [pscustomobject]@{ Item = 'Injectors present'; Ok = $true; Note = ($injList -join ', ') + ' beside the exe - harmless unless the Feeder log shows an NGX process refusal' }
     }
 
 if (-not $Json) {
@@ -1697,6 +1768,9 @@ if ($manifest) {
         streamlineHost = $hostSL
         featureMatched = $featureMatched
         nrProxyCompileFail = $proxyFail
+        d3dcompilerLocal = [bool]$dcLocal
+        d3dcompilerTrap = [bool]$dcTrap
+        ngxProcessRefused = [bool]$ngxBlock
     }
 }
 
@@ -1998,7 +2072,7 @@ if ($Install) {
         -WorkPercent $WorkResolution -StyleIndex $styleIndex -NrxPreset $Preset `
         -NrxIntensity $Intensity -SymMv $MVProvider -SymCleanFry $CleanFry `
         -SymTexBoost $TextureBoost -SymUplift $NeuralUplift -FeederMode $Feeder -ExeName $Exe `
-        -MfgAddon $MFGAddon
+        -MfgAddon $MFGAddon -LoadFromDllMain $LoadFromDllMain
     if ($Json -and $r) { $r | ConvertTo-Json -Compress -Depth 6 }
     exit 0
 }

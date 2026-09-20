@@ -242,7 +242,9 @@ function gameCard(g) {
       } else if (inst.featMatched) {
         chips.appendChild(chip('green', 'DLSS NR active'));
       }
-      if (inst.nrProxyCompileFail) chips.appendChild(chip('amber', 'NR proxy compile failed'));
+      if (inst.d3dcompilerTrap) chips.appendChild(chip('amber', 'd3dcompiler trap (cs_5_1)'));
+      else if (inst.nrProxyCompileFail) chips.appendChild(chip('amber', 'NR proxy compile failed'));
+      if (inst.ngxProcessRefused) chips.appendChild(chip('red', 'NGX blocked by injector/overlay'));
     }
   }
 
@@ -569,6 +571,7 @@ async function verifyGame(g) {
       'Native DLSS transport: ' + (g.native ? 'yes' : 'no (feeder)'),
       'Streamline host: ' + (r.streamlineHost ? 'yes' : 'no'),
       'NR proxy shader: ' + (r.nrProxyCompileFail ? 'compile FAILED (cs_5_1)' : 'ok'),
+      'Proxy compiler: ' + (r.d3dcompilerTrap ? 'local d3dcompiler_47.dll traps cs_5_1 - rename it (README 9.2)' : r.d3dcompilerLocal ? 'local copy present (new enough)' : 'System32 (ok)'),
     ].map(t => '<div class="vrow"><span class="ic"><span style="font-size:14px">\u00b7</span></span><span class="detail-row">' + esc(t) + '</span></div>').join('');
     showModal('Verify \u00B7 ' + r.exe,
       '<div class="m-intro">Loaded as <samp>' + esc(r.api || '?') + '</samp>' +
