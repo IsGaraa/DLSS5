@@ -276,7 +276,7 @@ async function reportBug(payload) {
       '',
       '',
       '**Environment**',
-      '- **App:** v2 (Electron ' + process.versions.electron + ' / Chromium ' + process.versions.chrome + ' / Node ' + process.versions.node + ')',
+      '- **App:** v3 (Electron ' + process.versions.electron + ' / Chromium ' + process.versions.chrome + ' / Node ' + process.versions.node + ')',
       '- **OS:** ' + os.platform() + ' ' + os.release(),
       '- **Git:** local ' + head + ' / remote main ' + remote,
       '- **Game:** ' + ((payload && payload.game) || 'not selected'),
